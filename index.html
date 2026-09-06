@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>AI Food Recognition & Recommendation Agent</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: white;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 700px;
+            margin: auto;
+            padding: 18px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 25px;
+            margin-bottom: 6px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #94a3b8;
+            margin-bottom: 20px;
+        }
+
+        .camera-card {
+            background: #1e293b;
+            border-radius: 18px;
+            overflow: hidden;
+            padding: 12px;
+        }
+
+        video {
+            width: 100%;
+            border-radius: 14px;
+            background: black;
+            max-height: 520px;
+            object-fit: cover;
+        }
+
+        button {
+            width: 100%;
+            margin-top: 14px;
+            padding: 16px;
+            border: none;
+            border-radius: 14px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        #scanButton {
+            background: #22c55e;
+            color: white;
+        }
+
+        #switchButton {
+            background: #334155;
+            color: white;
+        }
+
+        .status {
+            margin-top: 15px;
+            text-align: center;
+            color: #cbd5e1;
+            min-height: 25px;
+        }
+
+        .results {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .food-name {
+            background: #1e293b;
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 14px;
+        }
+
+        .food-name small {
+            color: #94a3b8;
+        }
+
+        .food-name h2 {
+            margin: 8px 0 0;
+            font-size: 29px;
+            color: #4ade80;
+        }
+
+        .card {
+            background: #1e293b;
+            padding: 17px;
+            margin-bottom: 12px;
+            border-radius: 16px;
+        }
+
+        .card h3 {
+            margin-top: 0;
+            color: #38bdf8;
+        }
+
+        .nutrition-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .nutrition-item {
+            background: #334155;
+            border-radius: 12px;
+            padding: 13px;
+        }
+
+        .nutrition-item span {
+            display: block;
+            color: #94a3b8;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .nutrition-item strong {
+            font-size: 16px;
+        }
+
+        canvas {
+            display: none;
+        }
+
+        .error {
+            color: #f87171;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>🍽️ AI Food Recognition</h1>
+
+    <div class="subtitle">
+        & Recommendation Agent
+    </div>
+
+    <div class="camera-card">
+
+        <video
+            id="camera"
+            autoplay
+            playsinline
+            muted>
+        </video>
+
+        <canvas id="canvas"></canvas>
+
+        <button id="scanButton">
+            📷 Scan Food
+        </button>
+
+        <button id="switchButton">
+            🔄 Switch Camera
+        </button>
+
+        <div class="status" id="status">
+            Starting camera...
+        </div>
+
+    </div>
+
+    <div class="results" id="results">
+
+        <div class="food-name">
+
+            <small>Detected Food</small>
+
+            <h2 id="food">
+                -
+            </h2>
+
+        </div>
+
+        <div class="card">
+
+            <h3>🤖 Recommendation</h3>
+
+            <div id="recommendation">
+                -
+            </div>
+
+        </div>
+
+        <div class="card">
+
+            <h3>🥗 Estimated Nutrition</h3>
+
+            <div class="nutrition-grid">
+
+                <div class="nutrition-item">
+                    <span>Calories</span>
+                    <strong id="calories">-</strong>
+                </div>
+
+                <div class="nutrition-item">
+                    <span>Protein</span>
+                    <strong id="protein">-</strong>
+                </div>
+
+                <div class="nutrition-item">
+                    <span>Carbohydrates</span>
+                    <strong id="carbohydrates">-</strong>
+                </div>
+
+                <div class="nutrition-item">
+                    <span>Fat</span>
+                    <strong id="fat">-</strong>
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="card">
+
+            <h3>❤️ Health Note</h3>
+
+            <div id="healthNote">
+                -
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+const video = document.getElementById("camera");
+const canvas = document.getElementById("canvas");
+
+const scanButton =
+    document.getElementById("scanButton");
+
+const switchButton =
+    document.getElementById("switchButton");
+
+const statusText =
+    document.getElementById("status");
+
+const results =
+    document.getElementById("results");
+
+let stream = null;
+
+let facingMode = "environment";
+
+async function startCamera() {
+
+    if (stream) {
+
+        stream
+            .getTracks()
+            .forEach(track => track.stop());
+
+    }
+
+    try {
+
+        stream =
+            await navigator.mediaDevices.getUserMedia({
+
+                video: {
+
+                    facingMode: {
+                        ideal: facingMode
+                    },
+
+                    width: {
+                        ideal: 1280
+                    },
+
+                    height: {
+                        ideal: 720
+                    }
+
+                },
+
+                audio: false
+
+            });
+
+        video.srcObject = stream;
+
+        statusText.textContent =
+            "Camera ready. Point it at food.";
+
+    }
+
+    catch (error) {
+
+        console.error(error);
+
+        statusText.innerHTML =
+            '<span class="error">' +
+            'Camera permission failed. Open this page using HTTPS and allow camera access.' +
+            '</span>';
+
+    }
+
+}
+
+switchButton.addEventListener(
+    "click",
+    async () => {
+
+        facingMode =
+            facingMode === "environment"
+                ? "user"
+                : "environment";
+
+        await startCamera();
+
+    }
+);
+
+scanButton.addEventListener(
+    "click",
+    async () => {
+
+        if (!video.videoWidth) {
+
+            statusText.textContent =
+                "Camera is not ready.";
+
+            return;
+
+        }
+
+        scanButton.disabled = true;
+
+        scanButton.textContent =
+            "⏳ Analyzing...";
+
+        statusText.textContent =
+            "AI is analyzing the food...";
+
+        canvas.width =
+            video.videoWidth;
+
+        canvas.height =
+            video.videoHeight;
+
+        const context =
+            canvas.getContext("2d");
+
+        context.drawImage(
+            video,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+        canvas.toBlob(
+            async blob => {
+
+                if (!blob) {
+
+                    statusText.textContent =
+                        "Could not capture image.";
+
+                    scanButton.disabled = false;
+
+                    scanButton.textContent =
+                        "📷 Scan Food";
+
+                    return;
+
+                }
+
+                const formData =
+                    new FormData();
+
+                formData.append(
+                    "image",
+                    blob,
+                    "camera.jpg"
+                );
+
+                try {
+
+                    const response =
+                        await fetch(
+                            "/analyze",
+                            {
+                                method: "POST",
+                                body: formData
+                            }
+                        );
+
+                    const data =
+                        await response.json();
+
+                    if (!response.ok || data.error) {
+
+                        throw new Error(
+                            data.error ||
+                            "Food analysis failed."
+                        );
+
+                    }
+
+                    document.getElementById(
+                        "food"
+                    ).textContent =
+                        data.food || "Unknown";
+
+                    document.getElementById(
+                        "recommendation"
+                    ).textContent =
+                        data.recommendation ||
+                        "No recommendation available.";
+
+                    document.getElementById(
+                        "calories"
+                    ).textContent =
+                        data.calories ||
+                        "Unavailable";
+
+                    document.getElementById(
+                        "protein"
+                    ).textContent =
+                        data.protein ||
+                        "Unavailable";
+
+                    document.getElementById(
+                        "carbohydrates"
+                    ).textContent =
+                        data.carbohydrates ||
+                        "Unavailable";
+
+                    document.getElementById(
+                        "fat"
+                    ).textContent =
+                        data.fat ||
+                        "Unavailable";
+
+                    document.getElementById(
+                        "healthNote"
+                    ).textContent =
+                        data.health_note ||
+                        "Nutrition values are approximate.";
+
+                    results.style.display =
+                        "block";
+
+                    statusText.textContent =
+                        "✅ Food analyzed successfully.";
+
+                    results.scrollIntoView({
+                        behavior: "smooth"
+                    });
+
+                }
+
+                catch (error) {
+
+                    console.error(error);
+
+                    statusText.innerHTML =
+                        '<span class="error">' +
+                        error.message +
+                        '</span>';
+
+                }
+
+                finally {
+
+                    scanButton.disabled = false;
+
+                    scanButton.textContent =
+                        "📷 Scan Food";
+
+                }
+
+            },
+
+            "image/jpeg",
+
+            0.85
+        );
+
+    }
+);
+
+startCamera();
+
+</script>
+
+</body>
+</html>
