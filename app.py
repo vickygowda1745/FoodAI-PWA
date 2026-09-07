@@ -2,6 +2,7 @@ import os
 import io
 import json
 import re
+import time
 
 from PIL import Image
 from flask import Flask, request, jsonify, send_from_directory
@@ -15,7 +16,11 @@ from google.genai import types
 # SETTINGS
 # ============================================================
 
-GEMINI_MODEL = "gemini-3.6-flash"
+PRIMARY_MODEL = "gemini-3.6-flash"
+FALLBACK_MODEL = "gemini-3.5-flash"
+
+MAX_RETRIES = 3
+RETRY_DELAY_SECONDS = 2
 
 app = Flask(__name__)
 CORS(app)
@@ -55,7 +60,25 @@ def get_image_bytes():
 
 
 # ============================================================
-# GENERAL FOOD RECOGNITION
+# GEMINI REQUEST
+# ============================================================
+
+def call_gemini(model_name, prompt, image_bytes):
+
+    return gemini_client.models.generate_content(
+        model=model_name,
+        contents=[
+            prompt,
+            types.Part.from_bytes(
+                data=image_bytes,
+                mime_type="image/jpeg"
+            )
+        ]
+    )
+
+
+# ============================================================
+# OPEN-ENDED FOOD RECOGNITION
 # ============================================================
 
 def recognize_food(image_bytes):
@@ -63,15 +86,15 @@ def recognize_food(image_bytes):
     prompt = """
 You are an AI Food Recognition & Recommendation Agent.
 
-Analyze the image carefully.
+Analyze this image carefully.
 
-Identify the food as specifically as possible.
+Identify the food as specifically as reasonably possible.
 
 Do not restrict yourself to any predefined food list.
 
 The food can be from any cuisine in the world.
 
-If multiple foods are visible, identify the main food and list other visible items.
+If multiple foods are visible, identify the main dish and list other visible items.
 
 Return ONLY valid JSON in this exact format:
 
@@ -104,18 +127,94 @@ If the image does not contain food, return:
 }
 """
 
-    response = gemini_client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=[
-            prompt,
-            types.Part.from_bytes(
-                data=image_bytes,
-                mime_type="image/jpeg"
-            )
-        ]
-    )
+    last_error = None
 
-    text = response.text.strip()
+    # --------------------------------------------------------
+    # TRY PRIMARY MODEL
+    # --------------------------------------------------------
+
+    for attempt in range(MAX_RETRIES):
+
+        try:
+
+            response = call_gemini(
+                PRIMARY_MODEL,
+                prompt,
+                image_bytes
+            )
+
+            return parse_gemini_response(
+                response.text
+            )
+
+        except Exception as e:
+
+            last_error = e
+
+            error_text = str(e)
+
+            print(
+                f"Primary Gemini attempt "
+                f"{attempt + 1} failed:",
+                error_text
+            )
+
+            if (
+                "503" in error_text
+                or
+                "UNAVAILABLE" in error_text
+                or
+                "high demand" in error_text.lower()
+            ):
+                time.sleep(
+                    RETRY_DELAY_SECONDS
+                )
+                continue
+
+            break
+
+
+    # --------------------------------------------------------
+    # TRY FALLBACK MODEL
+    # --------------------------------------------------------
+
+    try:
+
+        print(
+            "Trying fallback Gemini model..."
+        )
+
+        response = call_gemini(
+            FALLBACK_MODEL,
+            prompt,
+            image_bytes
+        )
+
+        return parse_gemini_response(
+            response.text
+        )
+
+    except Exception as fallback_error:
+
+        print(
+            "Fallback Gemini error:",
+            fallback_error
+        )
+
+        raise RuntimeError(
+            f"Gemini temporarily unavailable. "
+            f"Primary error: {last_error}. "
+            f"Fallback error: {fallback_error}"
+        )
+
+
+# ============================================================
+# PARSE GEMINI JSON
+# ============================================================
+
+def parse_gemini_response(text):
+
+    text = text.strip()
 
     text = re.sub(
         r"^```json\s*",
@@ -144,27 +243,35 @@ def predict_food():
         image_bytes = get_image_bytes()
 
         if not image_bytes:
+
             return jsonify({
                 "success": False,
                 "error": "No image received"
             }), 400
 
+
         # Validate image
+
         try:
+
             image = Image.open(
                 io.BytesIO(image_bytes)
             )
+
             image.verify()
 
         except Exception:
+
             return jsonify({
                 "success": False,
                 "error": "Invalid image"
             }), 400
 
+
         result = recognize_food(
             image_bytes
         )
+
 
         if not result.get(
             "is_food",
@@ -175,12 +282,15 @@ def predict_food():
                 "success": False,
                 "food": "Not food",
                 "confidence": 0,
-                "message": "No food confidently detected."
+                "message":
+                    "No food confidently detected."
             })
+
 
         return jsonify({
 
-            "success": True,
+            "success":
+                True,
 
             "recognizer":
                 "Gemini Vision",
@@ -234,14 +344,27 @@ def predict_food():
                 )
         })
 
+
     except Exception as e:
 
-        print("Prediction error:", e)
+        print(
+            "Prediction error:",
+            e
+        )
 
         return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+
+            "success":
+                False,
+
+            "error":
+                "Recognition service is temporarily busy. "
+                "Please try scanning again in a few seconds.",
+
+            "details":
+                str(e)
+
+        }), 503
 
 
 # ============================================================
@@ -293,13 +416,24 @@ def service_worker():
 def health():
 
     return jsonify({
-        "status": "online",
+
+        "status":
+            "online",
+
         "project":
             "AI Food Recognition & Recommendation Agent",
+
         "recognizer":
             "Gemini Vision",
+
         "mode":
-            "Open-ended food recognition"
+            "Open-ended food recognition",
+
+        "primary_model":
+            PRIMARY_MODEL,
+
+        "fallback_model":
+            FALLBACK_MODEL
     })
 
 
@@ -350,13 +484,18 @@ def api_predict():
 if __name__ == "__main__":
 
     print()
-    print("================================")
-    print("AI FOOD RECOGNITION")
-    print("& RECOMMENDATION AGENT")
-    print("================================")
-    print()
-    print("Recognition: Gemini Vision")
-    print("Mode: Open-ended food recognition")
+    print(
+        "================================"
+    )
+    print(
+        "AI FOOD RECOGNITION"
+    )
+    print(
+        "& RECOMMENDATION AGENT"
+    )
+    print(
+        "================================"
+    )
     print()
 
     app.run(
