@@ -2,9 +2,20 @@ import os
 import io
 import json
 import re
+import threading
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+
 from PIL import Image
 
-from flask import Flask, request, jsonify, make_response
+from flask import (
+    Flask,
+    request,
+    jsonify,
+    make_response
+)
+
 from flask_cors import CORS
 
 from google import genai
@@ -12,11 +23,8 @@ from google.genai import types
 
 
 # ============================================================
-# FOODAI CONFIGURATION
+# FOODAI SETTINGS
 # ============================================================
-
-# Free Gemini recognition only.
-# OpenAI/Astra is NOT used in this version.
 
 PRIMARY_MODEL = "gemini-3.8-flash"
 FALLBACK_MODEL = "gemini-3.5-flash-lite"
@@ -39,9 +47,18 @@ CORS(
     app,
     resources={
         r"/*": {
-            "origins": [GITHUB_ORIGIN],
-            "methods": ["GET", "POST", "OPTIONS"],
-            "allow_headers": ["Content-Type"]
+            "origins": [
+                GITHUB_ORIGIN
+            ],
+            "methods": [
+                "GET",
+                "POST",
+                "OPTIONS"
+            ],
+            "allow_headers": [
+                "Content-Type",
+                "X-FoodAI-Session"
+            ]
         }
     }
 )
@@ -64,16 +81,20 @@ def add_cors_headers(response):
 
         response.headers[
             "Access-Control-Allow-Headers"
-        ] = "Content-Type"
+        ] = (
+            "Content-Type, X-FoodAI-Session"
+        )
 
     return response
 
 
 # ============================================================
-# GEMINI CLIENT
+# GEMINI
 # ============================================================
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv(
+    "GEMINI_API_KEY"
+)
 
 gemini_client = None
 
@@ -86,12 +107,14 @@ if GEMINI_API_KEY:
             api_key=GEMINI_API_KEY
         )
 
-        print("Gemini Vision connected")
+        print(
+            "Gemini Vision connected"
+        )
 
     except Exception as error:
 
         print(
-            "Gemini client error:",
+            "Gemini connection error:",
             error
         )
 
@@ -100,6 +123,180 @@ else:
     print(
         "WARNING: GEMINI_API_KEY missing"
     )
+
+
+# ============================================================
+# TELEGRAM SETTINGS
+# ============================================================
+
+# DO NOT put the actual token or chat ID in this file.
+# They will be stored in Render Environment Variables.
+
+TELEGRAM_BOT_TOKEN = os.getenv(
+    "TELEGRAM_BOT_TOKEN"
+)
+
+TELEGRAM_CHAT_ID = os.getenv(
+    "TELEGRAM_CHAT_ID"
+)
+
+
+def telegram_configured():
+
+    return bool(
+        TELEGRAM_BOT_TOKEN
+        and
+        TELEGRAM_CHAT_ID
+    )
+
+
+# ============================================================
+# TELEGRAM MESSAGE
+# ============================================================
+
+def send_telegram_message(text):
+
+    if not telegram_configured():
+
+        print(
+            "Telegram not configured"
+        )
+
+        return
+
+
+    try:
+
+        url = (
+            "https://api.telegram.org/bot"
+            + TELEGRAM_BOT_TOKEN
+            + "/sendMessage"
+        )
+
+
+        payload = urllib.parse.urlencode(
+            {
+                "chat_id":
+                    TELEGRAM_CHAT_ID,
+
+                "text":
+                    text
+            }
+        ).encode(
+            "utf-8"
+        )
+
+
+        request_object = urllib.request.Request(
+            url,
+            data=payload,
+            method="POST"
+        )
+
+
+        urllib.request.urlopen(
+            request_object,
+            timeout=8
+        ).read()
+
+
+        print(
+            "Telegram notification sent"
+        )
+
+
+    except Exception as error:
+
+        # Telegram failure must NEVER break
+        # food recognition.
+
+        print(
+            "Telegram error:",
+            error
+        )
+
+
+# ============================================================
+# DEVICE / SESSION INFORMATION
+# ============================================================
+
+def get_scan_context():
+
+    user_agent = request.headers.get(
+        "User-Agent",
+        "Unknown device"
+    )
+
+
+    session_id = request.headers.get(
+        "X-FoodAI-Session",
+        "Not supplied"
+    )
+
+
+    # Keep only a short browser/device description.
+    # We are NOT collecting IMEI, phone number,
+    # MAC address or permanent device identifiers.
+
+    if len(user_agent) > 160:
+
+        user_agent = (
+            user_agent[:160]
+            + "..."
+        )
+
+
+    timestamp = datetime.now(
+        timezone.utc
+    ).strftime(
+        "%Y-%m-%d %H:%M:%S UTC"
+    )
+
+
+    return {
+
+        "user_agent":
+            user_agent,
+
+        "session_id":
+            session_id,
+
+        "time":
+            timestamp
+
+    }
+
+
+# ============================================================
+# ASYNC SCAN NOTIFICATION
+# ============================================================
+
+def notify_scan(
+    food_name,
+    confidence,
+    engine,
+    context
+):
+
+    message = (
+        "🍽️ FOODAI — NEW SCAN\n\n"
+        f"Food: {food_name}\n"
+        f"Confidence: {confidence}%\n"
+        f"Recognition: {engine}\n"
+        f"Time: {context['time']}\n"
+        f"Session: {context['session_id']}\n"
+        f"Device/Browser: {context['user_agent']}"
+    )
+
+
+    thread = threading.Thread(
+        target=send_telegram_message,
+        args=(message,),
+        daemon=True
+    )
+
+
+    thread.start()
 
 
 # ============================================================
@@ -125,37 +322,49 @@ def get_image_bytes():
     return request.get_data()
 
 
-def validate_image(image_bytes):
+def validate_image(
+    image_bytes
+):
 
     try:
 
         image = Image.open(
-            io.BytesIO(image_bytes)
+            io.BytesIO(
+                image_bytes
+            )
         )
 
         image.verify()
 
         return True
 
+
     except Exception:
 
         return False
 
 
-def get_image_mime_type(image_bytes):
+def get_image_mime_type(
+    image_bytes
+):
 
     try:
 
         image = Image.open(
-            io.BytesIO(image_bytes)
+            io.BytesIO(
+                image_bytes
+            )
         )
 
+
         image_format = (
-            image.format or "JPEG"
+            image.format
+            or
+            "JPEG"
         ).upper()
 
 
-        mime_types = {
+        mime_map = {
 
             "JPEG":
                 "image/jpeg",
@@ -175,10 +384,11 @@ def get_image_mime_type(image_bytes):
         }
 
 
-        return mime_types.get(
+        return mime_map.get(
             image_format,
             "image/jpeg"
         )
+
 
     except Exception:
 
@@ -194,7 +404,7 @@ def parse_json(text):
     if not text:
 
         raise ValueError(
-            "Empty response from vision model"
+            "Empty AI response"
         )
 
 
@@ -223,21 +433,21 @@ def parse_json(text):
     )
 
 
-    text = text.strip()
-
-
     try:
 
-        return json.loads(text)
+        return json.loads(
+            text
+        )
+
 
     except Exception:
 
-        # Try extracting JSON object
         match = re.search(
             r"\{.*\}",
             text,
             flags=re.DOTALL
         )
+
 
         if match:
 
@@ -247,7 +457,7 @@ def parse_json(text):
 
 
         raise ValueError(
-            "Vision model did not return valid JSON"
+            "AI did not return valid JSON"
         )
 
 
@@ -262,7 +472,9 @@ def normalize_food_name(name):
         return "Unknown Food"
 
 
-    clean = str(name).strip()
+    clean = str(
+        name
+    ).strip()
 
 
     replacements = {
@@ -275,9 +487,6 @@ def normalize_food_name(name):
 
         "shrimp curry":
             "Prawn Curry",
-
-        "shrimp masala":
-            "Prawn Masala",
 
         "shrimp fried rice":
             "Prawn Fried Rice",
@@ -294,97 +503,81 @@ def normalize_food_name(name):
         "egg biriyani":
             "Egg Biryani",
 
-        "vegetable biriyani":
-            "Vegetable Biryani",
-
         "veg biriyani":
             "Vegetable Biryani",
 
         "veg biryani":
             "Vegetable Biryani",
 
-        "paneer butter masala curry":
-            "Paneer Butter Masala",
-
-        "butter chicken curry":
-            "Butter Chicken",
-
-        "masala dosa":
-            "Masala Dosa",
+        "vegetable biriyani":
+            "Vegetable Biryani",
 
         "idly":
             "Idli",
 
         "idly sambar":
-            "Idli Sambar"
+            "Idli Sambar",
+
+        "butter chicken curry":
+            "Butter Chicken",
+
+        "paneer butter masala curry":
+            "Paneer Butter Masala"
 
     }
 
 
-    normalized = replacements.get(
-        clean.lower()
+    return replacements.get(
+        clean.lower(),
+        clean
     )
-
-
-    if normalized:
-
-        return normalized
-
-
-    return clean
 
 
 # ============================================================
 # FOOD RECOGNITION PROMPT
 # ============================================================
 
-FOOD_RECOGNITION_PROMPT = """
+RECOGNITION_PROMPT = """
 You are FoodAI, an expert visual food recognition system.
 
-Analyze the supplied image carefully and identify the MAIN FOOD
-or MAIN DISH visible.
+Analyze this image and identify the MAIN food or dish.
 
-IMPORTANT:
+The image may contain ANY food from ANY cuisine in the world.
+You are NOT restricted to a fixed food list.
 
-1. The food may come from ANY cuisine in the world.
-2. You are NOT restricted to a predefined food list.
-3. Identify the most specific dish supported by the image.
-4. Do not simply call everything "rice", "curry", "bread",
-   "dessert", etc. when a more specific dish is visually clear.
-5. Carefully inspect visible ingredients.
-6. Pay special attention to differences between visually similar
-   foods.
-7. For Indian dishes, use commonly understood Indian names.
-8. For Indian seafood dishes use "Prawn" rather than "Shrimp".
-9. Distinguish varieties of biryani whenever visible evidence
-   supports it:
-   - Chicken Biryani
-   - Mutton Biryani
-   - Prawn Biryani
-   - Egg Biryani
-   - Vegetable Biryani
-10. Distinguish biryani from pulao/fried rice when visual evidence
-    supports that distinction.
-11. Consider:
-    - meat
-    - seafood
-    - vegetables
-    - rice
-    - bread
-    - gravy
-    - sauce
-    - garnish
-    - texture
-    - preparation
-    - plating
-    - regional appearance
-12. Do not invent ingredients that are not reasonably visible.
-13. If multiple foods are visible, choose the dominant/main dish.
-14. If the image clearly does not contain food, mark is_food false.
+Identify the MOST SPECIFIC dish reasonably supported by
+visible evidence.
 
-Return ONLY valid JSON.
+Look carefully at:
 
-Required format:
+- meat or seafood type
+- rice variety
+- bread type
+- gravy
+- vegetables
+- sauce
+- garnish
+- texture
+- cooking method
+- plating
+- regional appearance
+
+If it is biryani, distinguish whenever visually possible:
+
+Chicken Biryani
+Mutton Biryani
+Prawn Biryani
+Egg Biryani
+Vegetable Biryani
+
+For Indian foods use common Indian terminology.
+
+Use Prawn instead of Shrimp for Indian dishes.
+
+Do not answer only "Biryani" when the protein or variety
+is clearly identifiable.
+
+Return ONLY valid JSON:
 
 {
   "is_food": true,
@@ -392,7 +585,7 @@ Required format:
   "confidence": 95
 }
 
-confidence must be an integer between 0 and 100.
+confidence must be an integer from 0 to 100.
 
 If there is clearly no food:
 
@@ -408,48 +601,84 @@ If there is clearly no food:
 # DETAILS PROMPT
 # ============================================================
 
-def create_details_prompt(food_name):
+def create_details_prompt(
+    food_name
+):
 
     return f"""
-You are FoodAI's food information and recommendation engine.
+You are the FoodAI recommendation engine.
 
-The image has already been identified as:
+Food:
 
 {food_name}
 
-Analyze the same food image.
+Give concise useful information about this food.
 
-Return ONLY valid JSON in this exact structure:
+Return ONLY valid JSON:
 
 {{
-  "cuisine": "Cuisine or regional origin",
-  "description": "Short useful description of the food",
+  "cuisine": "Cuisine or region",
+  "description": "Short food description",
   "visible_items": [
-    "visible ingredient or item 1",
-    "visible ingredient or item 2"
+    "item 1",
+    "item 2"
   ],
-  "recommendation": "Short serving or pairing recommendation",
-  "health_note": "Short general nutrition observation",
-  "similar_food": "One similar food"
+  "recommendation": "Best serving or pairing recommendation",
+  "health_note": "Short general nutritional observation",
+  "similar_food": "One similar dish"
 }}
 
-Rules:
+Do not give medical advice.
 
-- Keep answers concise.
-- Do not provide medical diagnosis.
-- Do not claim ingredients that cannot reasonably be inferred.
-- Use Indian terminology for Indian foods.
-- Do not return Markdown.
-- Return JSON only.
+Use Indian terminology for Indian foods.
+
+Return JSON only.
 """
 
 
 # ============================================================
-# GEMINI MODEL CALL
+# SEARCH PROMPT
 # ============================================================
 
-def call_gemini(
-    model_name,
+def create_search_prompt(
+    query
+):
+
+    return f"""
+You are FoodAI's food search engine.
+
+The user searched for:
+
+{query}
+
+Interpret the intended food or dish.
+
+Return ONLY valid JSON:
+
+{{
+  "food": "Canonical food name",
+  "cuisine": "Cuisine or region",
+  "description": "Short description",
+  "recommendation": "Serving or pairing recommendation",
+  "health_note": "Short general nutritional observation",
+  "similar_food": "One similar dish"
+}}
+
+If the query contains spelling mistakes, infer the most likely
+food name.
+
+Use Indian terminology for Indian dishes.
+
+Return JSON only.
+"""
+
+
+# ============================================================
+# GEMINI CALL
+# ============================================================
+
+def call_gemini_with_image(
+    model,
     prompt,
     image_bytes
 ):
@@ -457,7 +686,7 @@ def call_gemini(
     if not gemini_client:
 
         raise RuntimeError(
-            "Gemini Vision is not configured"
+            "Gemini is not configured"
         )
 
 
@@ -469,7 +698,7 @@ def call_gemini(
     response = (
         gemini_client.models.generate_content(
 
-            model=model_name,
+            model=model,
 
             contents=[
 
@@ -486,17 +715,43 @@ def call_gemini(
     )
 
 
-    if not response:
+    if not response.text:
 
         raise RuntimeError(
-            "Empty Gemini response"
+            "Empty AI response"
         )
+
+
+    return response.text
+
+
+def call_gemini_text(
+    model,
+    prompt
+):
+
+    if not gemini_client:
+
+        raise RuntimeError(
+            "Gemini is not configured"
+        )
+
+
+    response = (
+        gemini_client.models.generate_content(
+
+            model=model,
+
+            contents=prompt
+
+        )
+    )
 
 
     if not response.text:
 
         raise RuntimeError(
-            "Gemini returned no text"
+            "Empty AI response"
         )
 
 
@@ -504,10 +759,12 @@ def call_gemini(
 
 
 # ============================================================
-# OPEN-ENDED FOOD IDENTIFICATION
+# FOOD IDENTIFICATION
 # ============================================================
 
-def identify_food(image_bytes):
+def identify_food(
+    image_bytes
+):
 
     errors = []
 
@@ -521,52 +778,46 @@ def identify_food(image_bytes):
     ]
 
 
-    for model_name in models:
+    for model in models:
 
         try:
 
             print(
-                "FoodAI recognition model:",
-                model_name
+                "Trying recognition:",
+                model
             )
 
 
-            response_text = call_gemini(
+            response_text = (
+                call_gemini_with_image(
 
-                model_name,
+                    model,
 
-                FOOD_RECOGNITION_PROMPT,
+                    RECOGNITION_PROMPT,
 
-                image_bytes
+                    image_bytes
 
+                )
             )
 
 
-            result = parse_json(
+            data = parse_json(
                 response_text
             )
 
 
-            is_food = result.get(
-                "is_food",
-                True
-            )
-
-
-            food_name = normalize_food_name(
-
-                result.get(
+            food = normalize_food_name(
+                data.get(
                     "food",
                     "Unknown Food"
                 )
-
             )
 
 
             try:
 
                 confidence = int(
-                    result.get(
+                    data.get(
                         "confidence",
                         0
                     )
@@ -580,8 +831,8 @@ def identify_food(image_bytes):
             confidence = max(
                 0,
                 min(
-                    100,
-                    confidence
+                    confidence,
+                    100
                 )
             )
 
@@ -589,16 +840,21 @@ def identify_food(image_bytes):
             return {
 
                 "is_food":
-                    bool(is_food),
+                    bool(
+                        data.get(
+                            "is_food",
+                            True
+                        )
+                    ),
 
                 "food":
-                    food_name,
+                    food,
 
                 "confidence":
                     confidence,
 
                 "engine":
-                    model_name
+                    model
 
             }
 
@@ -606,19 +862,19 @@ def identify_food(image_bytes):
         except Exception as error:
 
             print(
-                "Recognition failed:",
-                model_name,
+                "Recognition model failed:",
+                model,
                 error
             )
 
 
             errors.append(
-                f"{model_name}: {str(error)}"
+                f"{model}: {error}"
             )
 
 
     raise RuntimeError(
-        "Recognition models unavailable. "
+        "Recognition unavailable: "
         + " | ".join(errors)
     )
 
@@ -627,40 +883,39 @@ def identify_food(image_bytes):
 # FOOD DETAILS
 # ============================================================
 
-def get_food_details(
+def generate_details(
     image_bytes,
     food_name
 ):
-
-    errors = []
-
 
     prompt = create_details_prompt(
         food_name
     )
 
 
-    models = [
+    errors = []
+
+
+    for model in [
 
         PRIMARY_MODEL,
 
         FALLBACK_MODEL
 
-    ]
-
-
-    for model_name in models:
+    ]:
 
         try:
 
-            response_text = call_gemini(
+            response_text = (
+                call_gemini_with_image(
 
-                model_name,
+                    model,
 
-                prompt,
+                    prompt,
 
-                image_bytes
+                    image_bytes
 
+                )
             )
 
 
@@ -669,9 +924,9 @@ def get_food_details(
             )
 
 
-            result["engine"] = (
-                model_name
-            )
+            result[
+                "engine"
+            ] = model
 
 
             return result
@@ -679,26 +934,94 @@ def get_food_details(
 
         except Exception as error:
 
-            print(
-                "Details failed:",
-                model_name,
-                error
-            )
-
-
             errors.append(
-                f"{model_name}: {str(error)}"
+                f"{model}: {error}"
             )
 
 
     raise RuntimeError(
-        "Food details unavailable. "
+        "Food details unavailable: "
         + " | ".join(errors)
     )
 
 
 # ============================================================
-# IDENTIFY ENDPOINT
+# SEARCH FOOD
+# ============================================================
+
+def search_food_information(
+    query
+):
+
+    prompt = create_search_prompt(
+        query
+    )
+
+
+    errors = []
+
+
+    for model in [
+
+        PRIMARY_MODEL,
+
+        FALLBACK_MODEL
+
+    ]:
+
+        try:
+
+            response_text = (
+                call_gemini_text(
+
+                    model,
+
+                    prompt
+
+                )
+            )
+
+
+            result = parse_json(
+                response_text
+            )
+
+
+            result[
+                "food"
+            ] = normalize_food_name(
+
+                result.get(
+                    "food",
+                    query
+                )
+
+            )
+
+
+            result[
+                "engine"
+            ] = model
+
+
+            return result
+
+
+        except Exception as error:
+
+            errors.append(
+                f"{model}: {error}"
+            )
+
+
+    raise RuntimeError(
+        "Food search unavailable: "
+        + " | ".join(errors)
+    )
+
+
+# ============================================================
+# IDENTIFY ROUTE
 # ============================================================
 
 @app.route(
@@ -720,7 +1043,14 @@ def identify():
 
     try:
 
-        image_bytes = get_image_bytes()
+        scan_context = (
+            get_scan_context()
+        )
+
+
+        image_bytes = (
+            get_image_bytes()
+        )
 
 
         if not image_bytes:
@@ -765,9 +1095,6 @@ def identify():
                 "success":
                     False,
 
-                "is_food":
-                    False,
-
                 "food":
                     "Not Food",
 
@@ -775,17 +1102,36 @@ def identify():
                     0,
 
                 "message":
-                    "No food detected in this image."
+                    "No food detected."
 
             }), 200
+
+
+        # Telegram notification.
+        # Runs in background.
+
+        notify_scan(
+
+            result[
+                "food"
+            ],
+
+            result[
+                "confidence"
+            ],
+
+            result[
+                "engine"
+            ],
+
+            scan_context
+
+        )
 
 
         return jsonify({
 
             "success":
-                True,
-
-            "is_food":
                 True,
 
             "food":
@@ -829,10 +1175,8 @@ def identify():
 
 
 # ============================================================
-# LEGACY /predict ENDPOINT
+# LEGACY PREDICT ROUTE
 # ============================================================
-
-# Keep this because the existing frontend may still call /predict.
 
 @app.route(
     "/predict",
@@ -853,19 +1197,21 @@ def predict():
 
     try:
 
-        image_bytes = get_image_bytes()
+        scan_context = (
+            get_scan_context()
+        )
+
+
+        image_bytes = (
+            get_image_bytes()
+        )
 
 
         if not image_bytes:
 
             return jsonify({
-
-                "success":
-                    False,
-
-                "error":
-                    "No image received"
-
+                "success": False,
+                "error": "No image received"
             }), 400
 
 
@@ -874,13 +1220,8 @@ def predict():
         ):
 
             return jsonify({
-
-                "success":
-                    False,
-
-                "error":
-                    "Invalid image"
-
+                "success": False,
+                "error": "Invalid image"
             }), 400
 
 
@@ -907,29 +1248,48 @@ def predict():
             }), 200
 
 
-        # Get details after recognition.
-        # If details fail, recognition still succeeds.
+        notify_scan(
+
+            result[
+                "food"
+            ],
+
+            result[
+                "confidence"
+            ],
+
+            result[
+                "engine"
+            ],
+
+            scan_context
+
+        )
+
 
         details = {}
 
 
         try:
 
-            details = get_food_details(
+            details = (
+                generate_details(
 
-                image_bytes,
+                    image_bytes,
 
-                result[
-                    "food"
-                ]
+                    result[
+                        "food"
+                    ]
 
+                )
             )
 
-        except Exception as details_error:
+
+        except Exception as detail_error:
 
             print(
-                "Optional details failed:",
-                details_error
+                "Detail generation failed:",
+                detail_error
             )
 
 
@@ -1015,7 +1375,7 @@ def predict():
 
 
 # ============================================================
-# DETAILS ENDPOINT
+# DETAILS ROUTE
 # ============================================================
 
 @app.route(
@@ -1037,38 +1397,32 @@ def details():
 
     try:
 
-        image_bytes = get_image_bytes()
+        image_bytes = (
+            get_image_bytes()
+        )
 
 
-        food_name = request.form.get(
-            "food",
-            ""
-        ).strip()
+        food_name = (
+            request.form.get(
+                "food",
+                ""
+            ).strip()
+        )
 
 
         if not image_bytes:
 
             return jsonify({
-
-                "success":
-                    False,
-
-                "error":
-                    "No image received"
-
+                "success": False,
+                "error": "No image received"
             }), 400
 
 
         if not food_name:
 
             return jsonify({
-
-                "success":
-                    False,
-
-                "error":
-                    "Food name missing"
-
+                "success": False,
+                "error": "Food name missing"
             }), 400
 
 
@@ -1077,27 +1431,26 @@ def details():
         ):
 
             return jsonify({
-
-                "success":
-                    False,
-
-                "error":
-                    "Invalid image"
-
+                "success": False,
+                "error": "Invalid image"
             }), 400
 
 
-        food_name = normalize_food_name(
-            food_name
+        food_name = (
+            normalize_food_name(
+                food_name
+            )
         )
 
 
-        result = get_food_details(
+        result = (
+            generate_details(
 
-            image_bytes,
+                image_bytes,
 
-            food_name
+                food_name
 
+            )
         )
 
 
@@ -1108,12 +1461,6 @@ def details():
 
             "food":
                 food_name,
-
-            "engine":
-                result.get(
-                    "engine",
-                    "Gemini Vision"
-                ),
 
             "cuisine":
                 result.get(
@@ -1177,7 +1524,151 @@ def details():
 
 
 # ============================================================
-# HEALTH CHECK
+# SEARCH ROUTE
+# ============================================================
+
+@app.route(
+    "/search",
+    methods=[
+        "POST",
+        "OPTIONS"
+    ]
+)
+def search():
+
+    if request.method == "OPTIONS":
+
+        return make_response(
+            "",
+            204
+        )
+
+
+    try:
+
+        data = request.get_json(
+            silent=True
+        ) or {}
+
+
+        query = str(
+            data.get(
+                "query",
+                ""
+            )
+        ).strip()
+
+
+        if not query:
+
+            return jsonify({
+
+                "success":
+                    False,
+
+                "error":
+                    "Search query is required"
+
+            }), 400
+
+
+        if len(query) > 100:
+
+            return jsonify({
+
+                "success":
+                    False,
+
+                "error":
+                    "Search query is too long"
+
+            }), 400
+
+
+        result = (
+            search_food_information(
+                query
+            )
+        )
+
+
+        return jsonify({
+
+            "success":
+                True,
+
+            "query":
+                query,
+
+            "food":
+                result.get(
+                    "food",
+                    query
+                ),
+
+            "cuisine":
+                result.get(
+                    "cuisine",
+                    "Unknown"
+                ),
+
+            "description":
+                result.get(
+                    "description",
+                    ""
+                ),
+
+            "recommendation":
+                result.get(
+                    "recommendation",
+                    ""
+                ),
+
+            "health_note":
+                result.get(
+                    "health_note",
+                    ""
+                ),
+
+            "similar_food":
+                result.get(
+                    "similar_food",
+                    ""
+                ),
+
+            "engine":
+                result.get(
+                    "engine",
+                    "FoodAI"
+                )
+
+        }), 200
+
+
+    except Exception as error:
+
+        print(
+            "SEARCH ERROR:",
+            error
+        )
+
+
+        return jsonify({
+
+            "success":
+                False,
+
+            "error":
+                "Food search temporarily unavailable.",
+
+            "details":
+                str(error)
+
+        }), 503
+
+
+# ============================================================
+# HEALTH
 # ============================================================
 
 @app.route(
@@ -1197,9 +1688,6 @@ def health():
         "recognition_mode":
             "open-ended",
 
-        "recognizer":
-            "Gemini Vision",
-
         "primary_model":
             PRIMARY_MODEL,
 
@@ -1210,6 +1698,12 @@ def health():
             bool(
                 GEMINI_API_KEY
             ),
+
+        "telegram_configured":
+            telegram_configured(),
+
+        "search_enabled":
+            True,
 
         "openai_used":
             False
@@ -1235,14 +1729,17 @@ def home():
         "status":
             "online",
 
-        "recognition":
-            "Open-ended food recognition",
+        "features": [
 
-        "recognizer":
-            "Gemini Vision",
+            "Camera food recognition",
 
-        "openai_used":
-            False
+            "Food search",
+
+            "Food recommendations",
+
+            "Telegram scan notifications"
+
+        ]
 
     }), 200
 
@@ -1255,20 +1752,26 @@ if __name__ == "__main__":
 
     print()
     print(
-        "============================================"
+        "======================================"
     )
 
     print(
-        " FOODAI"
+        "              FOODAI"
     )
 
     print(
-        " AI Food Recognition & Recommendation Agent"
+        "AI Food Recognition"
     )
 
     print(
-        "============================================"
+        "& Recommendation Agent"
     )
+
+    print(
+        "======================================"
+    )
+
+    print()
 
     print(
         "Primary:",
@@ -1281,8 +1784,18 @@ if __name__ == "__main__":
     )
 
     print(
-        "OpenAI:",
-        "DISABLED"
+        "Search:",
+        "ENABLED"
+    )
+
+    print(
+        "Telegram:",
+        (
+            "CONFIGURED"
+            if telegram_configured()
+            else
+            "NOT CONFIGURED"
+        )
     )
 
     print()
@@ -1290,7 +1803,8 @@ if __name__ == "__main__":
 
     app.run(
 
-        host="0.0.0.0",
+        host=
+            "0.0.0.0",
 
         port=int(
             os.getenv(
