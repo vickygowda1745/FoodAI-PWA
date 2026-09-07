@@ -1,22 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
 
-    <meta name="viewport"
-          content="width=device-width,
-                   initial-scale=1.0,
-                   viewport-fit=cover">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    >
 
-    <meta name="theme-color"
-          content="#0f172a">
+    <meta
+        name="theme-color"
+        content="#0f172a"
+    >
 
-    <link rel="manifest"
-          href="manifest.json">
+    <link
+        rel="manifest"
+        href="manifest.json"
+    >
 
     <title>
         AI Food Recognition & Recommendation Agent
     </title>
+
 
     <style>
 
@@ -25,138 +32,276 @@
         }
 
         body {
+
             margin: 0;
-            font-family: Arial, sans-serif;
-            background: #0f172a;
-            color: white;
+
+            font-family:
+                Arial,
+                sans-serif;
+
+            background:
+                #0f172a;
+
+            color:
+                white;
+
         }
+
 
         .container {
-            max-width: 700px;
+
+            width: 100%;
+
+            max-width: 720px;
+
             margin: auto;
-            padding: 20px;
+
+            padding: 18px;
+
         }
+
 
         h1 {
+
             text-align: center;
+
             margin-bottom: 5px;
+
+            font-size: 30px;
+
         }
+
 
         .subtitle {
+
             text-align: center;
+
             color: #94a3b8;
-            margin-bottom: 25px;
-            font-size: 18px;
+
+            margin-bottom: 20px;
+
+            font-size: 17px;
+
         }
+
 
         .card {
+
             background: #1e293b;
+
             border-radius: 22px;
-            padding: 18px;
-            margin-bottom: 20px;
+
+            padding: 16px;
+
+            margin-bottom: 18px;
+
         }
 
+
         video {
+
             width: 100%;
+
             border-radius: 18px;
+
             background: black;
-            max-height: 500px;
+
             object-fit: cover;
+
+            max-height: 520px;
+
         }
+
 
         canvas {
             display: none;
         }
 
+
         button {
+
             width: 100%;
+
             border: none;
-            border-radius: 15px;
-            padding: 17px;
-            margin-top: 14px;
-            font-size: 20px;
+
+            border-radius: 14px;
+
+            padding: 16px;
+
+            margin-top: 13px;
+
+            font-size: 19px;
+
             font-weight: bold;
+
             cursor: pointer;
+
         }
+
 
         #scanButton {
+
             background: #22c55e;
+
             color: white;
+
         }
+
 
         #switchButton {
+
             background: #475569;
+
             color: white;
+
         }
+
 
         button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
+
+            opacity: 0.55;
+
         }
+
 
         #status {
+
+            margin-top: 15px;
+
             text-align: center;
-            margin-top: 16px;
-            font-size: 17px;
+
             color: #cbd5e1;
-        }
 
-        .result-card {
-            display: none;
-            background: #1e293b;
-            border-radius: 22px;
-            padding: 20px;
-            margin-top: 20px;
-        }
+            font-size: 16px;
 
-        .food-name {
-            font-size: 30px;
-            font-weight: bold;
-            margin-bottom: 8px;
-            color: #22c55e;
-        }
-
-        .confidence {
-            color: #cbd5e1;
-            margin-bottom: 18px;
-        }
-
-        .section {
-            background: #334155;
-            border-radius: 15px;
-            padding: 15px;
-            margin-top: 14px;
-        }
-
-        .section-title {
-            font-weight: bold;
-            margin-bottom: 8px;
-            color: #f8fafc;
-        }
-
-        .section-text {
-            color: #e2e8f0;
             line-height: 1.5;
+
         }
 
-        .error {
-            color: #f87171;
-        }
 
         .loading {
+
+            color: #facc15 !important;
+
+        }
+
+
+        .error {
+
+            color: #f87171 !important;
+
+        }
+
+
+        .success {
+
+            color: #4ade80 !important;
+
+        }
+
+
+        .result-card {
+
+            display: none;
+
+            background: #1e293b;
+
+            border-radius: 22px;
+
+            padding: 20px;
+
+            margin-top: 18px;
+
+        }
+
+
+        .food-name {
+
+            font-size: 31px;
+
+            font-weight: bold;
+
+            color: #22c55e;
+
+            margin-bottom: 8px;
+
+        }
+
+
+        .confidence {
+
+            color: #cbd5e1;
+
+            font-size: 17px;
+
+            margin-bottom: 16px;
+
+        }
+
+
+        .details-loading {
+
             color: #facc15;
+
+            margin: 15px 0;
+
+        }
+
+
+        .section {
+
+            background: #334155;
+
+            border-radius: 15px;
+
+            padding: 15px;
+
+            margin-top: 13px;
+
+        }
+
+
+        .section-title {
+
+            font-weight: bold;
+
+            margin-bottom: 7px;
+
+            font-size: 17px;
+
+        }
+
+
+        .section-text {
+
+            color: #e2e8f0;
+
+            line-height: 1.5;
+
+        }
+
+
+        #detailsArea {
+
+            display: none;
+
         }
 
     </style>
+
 </head>
+
 
 <body>
 
+
 <div class="container">
+
 
     <h1>
         🍽️ AI Food Recognition
     </h1>
+
 
     <div class="subtitle">
         & Recommendation Agent
@@ -165,150 +310,241 @@
 
     <div class="card">
 
+
         <video
             id="camera"
             autoplay
             playsinline
-            muted>
-        </video>
+            muted
+        ></video>
+
 
         <canvas
-            id="canvas">
-        </canvas>
+            id="canvas"
+        ></canvas>
 
 
         <button
-            id="scanButton">
+            id="scanButton"
+        >
             📷 Scan Food
         </button>
 
 
         <button
-            id="switchButton">
+            id="switchButton"
+        >
             🔄 Switch Camera
         </button>
 
 
-        <div id="status">
+        <div
+            id="status"
+        >
             Starting camera...
         </div>
+
 
     </div>
 
 
     <div
         id="resultCard"
-        class="result-card">
+        class="result-card"
+    >
+
 
         <div
             id="foodName"
-            class="food-name">
+            class="food-name"
+        >
         </div>
+
 
         <div
             id="confidence"
-            class="confidence">
+            class="confidence"
+        >
         </div>
 
 
-        <div class="section">
-            <div class="section-title">
-                🌍 Cuisine
-            </div>
-
-            <div
-                id="cuisine"
-                class="section-text">
-            </div>
+        <div
+            id="detailsLoading"
+            class="details-loading"
+        >
+            Loading recommendations...
         </div>
 
 
-        <div class="section">
-            <div class="section-title">
-                📝 Description
+        <div
+            id="detailsArea"
+        >
+
+
+            <div class="section">
+
+                <div class="section-title">
+                    🌍 Cuisine
+                </div>
+
+                <div
+                    id="cuisine"
+                    class="section-text"
+                >
+                </div>
+
             </div>
 
-            <div
-                id="description"
-                class="section-text">
+
+            <div class="section">
+
+                <div class="section-title">
+                    📝 Description
+                </div>
+
+                <div
+                    id="description"
+                    class="section-text"
+                >
+                </div>
+
             </div>
+
+
+            <div class="section">
+
+                <div class="section-title">
+                    👀 Visible Items
+                </div>
+
+                <div
+                    id="visibleItems"
+                    class="section-text"
+                >
+                </div>
+
+            </div>
+
+
+            <div class="section">
+
+                <div class="section-title">
+                    🍴 Recommendation
+                </div>
+
+                <div
+                    id="recommendation"
+                    class="section-text"
+                >
+                </div>
+
+            </div>
+
+
+            <div class="section">
+
+                <div class="section-title">
+                    ❤️ Health Note
+                </div>
+
+                <div
+                    id="healthNote"
+                    class="section-text"
+                >
+                </div>
+
+            </div>
+
+
+            <div class="section">
+
+                <div class="section-title">
+                    🔁 Similar Food
+                </div>
+
+                <div
+                    id="similarFood"
+                    class="section-text"
+                >
+                </div>
+
+            </div>
+
+
         </div>
 
-
-        <div class="section">
-            <div class="section-title">
-                👀 Visible Items
-            </div>
-
-            <div
-                id="visibleItems"
-                class="section-text">
-            </div>
-        </div>
-
-
-        <div class="section">
-            <div class="section-title">
-                🍴 Recommendation
-            </div>
-
-            <div
-                id="recommendation"
-                class="section-text">
-            </div>
-        </div>
-
-
-        <div class="section">
-            <div class="section-title">
-                ❤️ Health Note
-            </div>
-
-            <div
-                id="healthNote"
-                class="section-text">
-            </div>
-        </div>
-
-
-        <div class="section">
-            <div class="section-title">
-                🔁 Similar Food
-            </div>
-
-            <div
-                id="similarFood"
-                class="section-text">
-            </div>
-        </div>
 
     </div>
+
 
 </div>
 
 
 <script>
 
+
 const BACKEND_URL =
     "https://foodai-pwa.onrender.com";
 
+
 const video =
-    document.getElementById("camera");
+    document.getElementById(
+        "camera"
+    );
+
 
 const canvas =
-    document.getElementById("canvas");
+    document.getElementById(
+        "canvas"
+    );
+
 
 const scanButton =
-    document.getElementById("scanButton");
+    document.getElementById(
+        "scanButton"
+    );
+
 
 const switchButton =
-    document.getElementById("switchButton");
+    document.getElementById(
+        "switchButton"
+    );
+
 
 const statusText =
-    document.getElementById("status");
+    document.getElementById(
+        "status"
+    );
+
 
 const resultCard =
-    document.getElementById("resultCard");
+    document.getElementById(
+        "resultCard"
+    );
+
+
+const foodName =
+    document.getElementById(
+        "foodName"
+    );
+
+
+const confidence =
+    document.getElementById(
+        "confidence"
+    );
+
+
+const detailsLoading =
+    document.getElementById(
+        "detailsLoading"
+    );
+
+
+const detailsArea =
+    document.getElementById(
+        "detailsArea"
+    );
 
 
 let currentStream = null;
@@ -317,9 +553,21 @@ let facingMode =
     "environment";
 
 
+let lastBlob = null;
+
+let lastFoodName = null;
+
+
+
+// ============================================================
+// CAMERA
+// ============================================================
+
 async function startCamera() {
 
+
     try {
+
 
         if (currentStream) {
 
@@ -368,35 +616,47 @@ async function startCamera() {
 
 
         statusText.textContent =
-            "Camera ready. Show a food and tap Scan Food.";
+            "Camera ready. Show food and tap Scan Food.";
+
 
         statusText.className =
-            "";
+            "success";
+
 
     }
 
     catch (error) {
 
+
         console.error(
-            "Camera error:",
             error
         );
 
 
         statusText.textContent =
-            "Camera permission failed. Please allow camera access.";
+            "Camera permission failed. Allow camera access.";
+
 
         statusText.className =
             "error";
+
 
     }
 
 }
 
 
+
+// ============================================================
+// SWITCH CAMERA
+// ============================================================
+
 switchButton.addEventListener(
+
     "click",
+
     async () => {
+
 
         facingMode =
             facingMode ===
@@ -409,245 +669,316 @@ switchButton.addEventListener(
 
         await startCamera();
 
+
     }
+
 );
 
 
-scanButton.addEventListener(
-    "click",
-    async () => {
 
-        if (
-            !video.videoWidth ||
-            !video.videoHeight
-        ) {
+// ============================================================
+// CAPTURE SMALL IMAGE
+// ============================================================
 
-            statusText.textContent =
-                "Camera is not ready.";
-
-            statusText.className =
-                "error";
-
-            return;
-
-        }
+function captureImage() {
 
 
-        scanButton.disabled =
-            true;
+    return new Promise(
 
-        statusText.textContent =
-            "🔍 AI is analyzing the food...";
-
-        statusText.className =
-            "loading";
-
-        resultCard.style.display =
-            "none";
+        (resolve, reject) => {
 
 
-        const width =
-            video.videoWidth;
+            if (
+                !video.videoWidth ||
+                !video.videoHeight
+            ) {
 
-        const height =
-            video.videoHeight;
+                reject(
+                    new Error(
+                        "Camera is not ready."
+                    )
+                );
+
+                return;
+
+            }
 
 
-        canvas.width =
-            width;
+            /*
+            Smaller image = faster upload
+            and faster AI processing
+            */
 
-        canvas.height =
-            height;
+            const TARGET_WIDTH =
+                640;
 
 
-        const ctx =
-            canvas.getContext(
-                "2d"
+            const ratio =
+                video.videoHeight /
+                video.videoWidth;
+
+
+            const TARGET_HEIGHT =
+                Math.round(
+                    TARGET_WIDTH *
+                    ratio
+                );
+
+
+            canvas.width =
+                TARGET_WIDTH;
+
+
+            canvas.height =
+                TARGET_HEIGHT;
+
+
+            const ctx =
+                canvas.getContext(
+                    "2d"
+                );
+
+
+            ctx.drawImage(
+
+                video,
+
+                0,
+                0,
+
+                TARGET_WIDTH,
+                TARGET_HEIGHT
+
             );
 
 
-        ctx.drawImage(
-            video,
-            0,
-            0,
-            width,
-            height
-        );
+            canvas.toBlob(
 
+                blob => {
 
-        canvas.toBlob(
-
-            async (blob) => {
-
-                try {
 
                     if (!blob) {
 
-                        throw new Error(
-                            "Could not capture image."
+                        reject(
+                            new Error(
+                                "Image capture failed."
+                            )
                         );
-
-                    }
-
-
-                    const formData =
-                        new FormData();
-
-
-                    formData.append(
-                        "image",
-                        blob,
-                        "food.jpg"
-                    );
-
-
-                    const response =
-                        await fetch(
-
-                            BACKEND_URL +
-                            "/predict",
-
-                            {
-                                method:
-                                    "POST",
-
-                                body:
-                                    formData
-                            }
-
-                        );
-
-
-                    const contentType =
-                        response.headers.get(
-                            "content-type"
-                        );
-
-
-                    if (
-                        !contentType ||
-                        !contentType.includes(
-                            "application/json"
-                        )
-                    ) {
-
-                        const text =
-                            await response.text();
-
-                        throw new Error(
-                            "Backend returned a non-JSON response."
-                        );
-
-                    }
-
-
-                    const data =
-                        await response.json();
-
-
-                    if (!response.ok) {
-
-                        throw new Error(
-                            data.error ||
-                            "Server error"
-                        );
-
-                    }
-
-
-                    if (!data.success) {
-
-                        statusText.textContent =
-                            data.message ||
-                            data.error ||
-                            "No food confidently detected.";
-
-                        statusText.className =
-                            "error";
-
-                        scanButton.disabled =
-                            false;
 
                         return;
 
                     }
 
 
-                    showResult(
-                        data
+                    resolve(
+                        blob
                     );
 
 
-                    statusText.textContent =
-                        "✅ Food recognized successfully.";
+                },
 
-                    statusText.className =
-                        "";
+                "image/jpeg",
 
+                0.72
 
-                }
-
-                catch (error) {
-
-                    console.error(
-                        error
-                    );
+            );
 
 
-                    statusText.textContent =
-                        "Error: " +
-                        error.message;
+        }
 
-                    statusText.className =
-                        "error";
+    );
 
-                }
+}
 
-                finally {
 
-                    scanButton.disabled =
-                        false;
 
-                }
+// ============================================================
+// FAST IDENTIFICATION
+// ============================================================
 
-            },
+async function identifyFood(
+    blob
+) {
 
-            "image/jpeg",
 
-            0.90
+    const formData =
+        new FormData();
+
+
+    formData.append(
+
+        "image",
+
+        blob,
+
+        "food.jpg"
+
+    );
+
+
+    const response =
+        await fetch(
+
+            BACKEND_URL +
+            "/identify",
+
+            {
+
+                method:
+                    "POST",
+
+                body:
+                    formData
+
+            }
+
+        );
+
+
+    const data =
+        await response.json();
+
+
+    if (
+        !response.ok ||
+        !data.success
+    ) {
+
+        throw new Error(
+
+            data.error ||
+            "Food recognition failed."
 
         );
 
     }
-);
 
 
-function showResult(data) {
+    return data;
 
-    resultCard.style.display =
+}
+
+
+
+// ============================================================
+// DETAILS
+// ============================================================
+
+async function loadDetails(
+    blob,
+    food
+) {
+
+
+    try {
+
+
+        const formData =
+            new FormData();
+
+
+        formData.append(
+
+            "image",
+
+            blob,
+
+            "food.jpg"
+
+        );
+
+
+        formData.append(
+
+            "food",
+
+            food
+
+        );
+
+
+        const response =
+            await fetch(
+
+                BACKEND_URL +
+                "/details",
+
+                {
+
+                    method:
+                        "POST",
+
+                    body:
+                        formData
+
+                }
+
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (
+            !response.ok ||
+            !data.success
+        ) {
+
+            throw new Error(
+
+                data.error ||
+                "Recommendation failed."
+
+            );
+
+        }
+
+
+        showDetails(
+            data
+        );
+
+
+    }
+
+    catch (error) {
+
+
+        console.error(
+            error
+        );
+
+
+        detailsLoading.textContent =
+            "Recommendations temporarily unavailable.";
+
+
+        detailsLoading.className =
+            "error";
+
+
+    }
+
+}
+
+
+
+// ============================================================
+// DISPLAY DETAILS
+// ============================================================
+
+function showDetails(
+    data
+) {
+
+
+    detailsLoading.style.display =
+        "none";
+
+
+    detailsArea.style.display =
         "block";
-
-
-    document
-        .getElementById(
-            "foodName"
-        )
-        .textContent =
-        data.food ||
-        "Unknown Food";
-
-
-    document
-        .getElementById(
-            "confidence"
-        )
-        .textContent =
-        "Confidence: " +
-        (
-            data.confidence ??
-            0
-        ) +
-        "%";
 
 
     document
@@ -668,7 +999,7 @@ function showResult(data) {
         "No description available.";
 
 
-    const visibleItems =
+    const items =
         Array.isArray(
             data.visible_items
         )
@@ -683,9 +1014,9 @@ function showResult(data) {
             "visibleItems"
         )
         .textContent =
-        visibleItems.length
+        items.length
             ?
-        visibleItems.join(", ")
+        items.join(", ")
             :
         "No additional items identified.";
 
@@ -719,14 +1050,170 @@ function showResult(data) {
 }
 
 
+
+// ============================================================
+// SCAN BUTTON
+// ============================================================
+
+scanButton.addEventListener(
+
+    "click",
+
+    async () => {
+
+
+        try {
+
+
+            scanButton.disabled =
+                true;
+
+
+            resultCard.style.display =
+                "none";
+
+
+            detailsArea.style.display =
+                "none";
+
+
+            detailsLoading.style.display =
+                "block";
+
+
+            detailsLoading.className =
+                "details-loading";
+
+
+            detailsLoading.textContent =
+                "Loading recommendations...";
+
+
+            statusText.textContent =
+                "⚡ Identifying food...";
+
+
+            statusText.className =
+                "loading";
+
+
+            // Capture once
+
+            const blob =
+                await captureImage();
+
+
+            lastBlob =
+                blob;
+
+
+            // FAST recognition
+
+            const result =
+                await identifyFood(
+                    blob
+                );
+
+
+            lastFoodName =
+                result.food;
+
+
+            // Show immediately
+
+            resultCard.style.display =
+                "block";
+
+
+            foodName.textContent =
+                result.food ||
+                "Unknown Food";
+
+
+            confidence.textContent =
+                "Confidence: " +
+                (
+                    result.confidence ??
+                    0
+                ) +
+                "%";
+
+
+            statusText.textContent =
+                "✅ Food identified";
+
+
+            statusText.className =
+                "success";
+
+
+            /*
+            Load recommendation AFTER
+            food name is already visible
+            */
+
+            loadDetails(
+
+                blob,
+
+                result.food
+
+            );
+
+
+        }
+
+        catch (error) {
+
+
+            console.error(
+                error
+            );
+
+
+            statusText.textContent =
+                "Error: " +
+                error.message;
+
+
+            statusText.className =
+                "error";
+
+
+        }
+
+        finally {
+
+
+            scanButton.disabled =
+                false;
+
+
+        }
+
+
+    }
+
+);
+
+
+
+// ============================================================
+// SERVICE WORKER
+// ============================================================
+
 if (
     "serviceWorker"
     in navigator
 ) {
 
+
     window.addEventListener(
+
         "load",
+
         () => {
+
 
             navigator
                 .serviceWorker
@@ -736,20 +1223,30 @@ if (
                 .catch(
                     error =>
                         console.log(
-                            "Service worker error:",
                             error
                         )
                 );
 
+
         }
+
     );
+
 
 }
 
 
+
+// ============================================================
+// START CAMERA
+// ============================================================
+
 startCamera();
+
 
 </script>
 
+
 </body>
+
 </html>

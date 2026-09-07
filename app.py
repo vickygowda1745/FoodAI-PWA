@@ -2,14 +2,12 @@ import os
 import io
 import json
 import re
-import time
 
 from PIL import Image
 from flask import (
     Flask,
     request,
     jsonify,
-    send_from_directory,
     make_response
 )
 from flask_cors import CORS
@@ -22,14 +20,8 @@ from google.genai import types
 # SETTINGS
 # ============================================================
 
-MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.7-flash",
-    "gemini-3.5-flash-lite"
-]
-
-MAX_RETRIES_PER_MODEL = 1
-RETRY_DELAY_SECONDS = 1
+FAST_MODEL = "gemini-3.5-flash-lite"
+DETAIL_MODEL = "gemini-3.8-flash"
 
 GITHUB_ORIGIN = "https://vickygowda1745.github.io"
 
@@ -40,7 +32,7 @@ GITHUB_ORIGIN = "https://vickygowda1745.github.io"
 
 app = Flask(__name__)
 
-app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 6 * 1024 * 1024
 
 
 # ============================================================
@@ -51,17 +43,9 @@ CORS(
     app,
     resources={
         r"/*": {
-            "origins": [
-                GITHUB_ORIGIN
-            ],
-            "methods": [
-                "GET",
-                "POST",
-                "OPTIONS"
-            ],
-            "allow_headers": [
-                "Content-Type"
-            ]
+            "origins": [GITHUB_ORIGIN],
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type"]
         }
     }
 )
@@ -102,39 +86,46 @@ if not GEMINI_API_KEY:
     )
 
 
-gemini_client = genai.Client(
+client = genai.Client(
     api_key=GEMINI_API_KEY
 )
 
-print("Gemini Vision connected")
+print("Gemini connected")
 
 
 # ============================================================
-# IMAGE INPUT
+# HELPERS
 # ============================================================
 
 def get_image_bytes():
 
     if "image" in request.files:
-
-        return request.files[
-            "image"
-        ].read()
+        return request.files["image"].read()
 
     if "file" in request.files:
-
-        return request.files[
-            "file"
-        ].read()
+        return request.files["file"].read()
 
     return request.get_data()
 
 
-# ============================================================
-# PARSE JSON
-# ============================================================
+def validate_image(image_bytes):
 
-def parse_json_response(text):
+    try:
+
+        image = Image.open(
+            io.BytesIO(image_bytes)
+        )
+
+        image.verify()
+
+        return True
+
+    except Exception:
+
+        return False
+
+
+def clean_json(text):
 
     text = text.strip()
 
@@ -155,22 +146,61 @@ def parse_json_response(text):
 
 
 # ============================================================
-# GEMINI CALL
+# NAME NORMALIZATION
 # ============================================================
 
-def call_model(
-    model_name,
-    prompt,
-    image_bytes
-):
+def normalize_food_name(food_name):
 
-    return gemini_client.models.generate_content(
+    if not food_name:
+        return "Unknown Food"
 
-        model=model_name,
+    name = food_name.strip()
 
+    replacements = {
+        "Shrimp Biryani": "Prawn Biryani",
+        "Shrimp Fried Rice": "Prawn Fried Rice",
+        "Shrimp Curry": "Prawn Curry",
+        "Chicken Biriyani": "Chicken Biryani",
+        "Veg Biriyani": "Vegetable Biryani",
+        "Vegetable Biriyani": "Vegetable Biryani"
+    }
+
+    return replacements.get(
+        name,
+        name
+    )
+
+
+# ============================================================
+# FAST FOOD IDENTIFICATION
+# ============================================================
+
+def identify_food_fast(image_bytes):
+
+    prompt = """
+Identify the main food in this image.
+
+Return ONLY valid JSON:
+
+{
+  "food": "specific food name",
+  "confidence": 0
+}
+
+Rules:
+- Do not give explanation.
+- Do not give recommendations.
+- Do not return markdown.
+- Use the most specific food name you can.
+- Prefer Indian naming when appropriate.
+- Use "Prawn" instead of "Shrimp" for Indian dishes.
+- confidence must be an integer from 0 to 100.
+"""
+
+    response = client.models.generate_content(
+        model=FAST_MODEL,
         contents=[
             prompt,
-
             types.Part.from_bytes(
                 data=image_bytes,
                 mime_type="image/jpeg"
@@ -178,145 +208,78 @@ def call_model(
         ]
     )
 
+    result = clean_json(
+        response.text
+    )
+
+    result["food"] = normalize_food_name(
+        result.get(
+            "food",
+            "Unknown Food"
+        )
+    )
+
+    return result
+
 
 # ============================================================
-# OPEN-ENDED FOOD RECOGNITION
+# DETAILED RECOMMENDATION
 # ============================================================
 
-def recognize_food(image_bytes):
+def get_food_details(
+    image_bytes,
+    detected_food
+):
 
-    prompt = """
-You are an AI Food Recognition & Recommendation Agent.
+    prompt = f"""
+The food has already been identified as:
 
-Carefully analyze this image.
+{detected_food}
 
-Your job is to identify the food as specifically as reasonably possible.
-
-IMPORTANT:
-
-- Do NOT restrict yourself to a fixed list.
-- Food may come from any country or cuisine.
-- It may be homemade, restaurant food, street food, packaged food,
-  dessert, drink, snack, breakfast, lunch or dinner.
-- If several foods are visible, identify the MAIN food and list
-  other visible foods separately.
-- If the exact dish is uncertain, give the most likely dish name,
-  but lower the confidence.
-- Never pretend to have 100 percent certainty unless visually obvious.
+Analyze the image and return useful recommendation details.
 
 Return ONLY valid JSON:
 
-{
-  "is_food": true,
-  "food": "specific food name",
-  "confidence": 0,
+{{
   "cuisine": "cuisine or Unknown",
   "description": "short description",
   "visible_items": ["item 1", "item 2"],
-  "recommendation": "best serving or pairing recommendation",
+  "recommendation": "best serving or pairing suggestion",
   "health_note": "short general nutrition note",
   "similar_food": "similar dish"
-}
+}}
 
-confidence must be an integer between 0 and 100.
-
-If this is not food:
-
-{
-  "is_food": false,
-  "food": "Not food",
-  "confidence": 0,
-  "cuisine": "N/A",
-  "description": "No food confidently detected.",
-  "visible_items": [],
-  "recommendation": "",
-  "health_note": "",
-  "similar_food": ""
-}
+Rules:
+- Keep answers short and practical.
+- Do not provide medical advice.
+- Do not return markdown.
 """
 
-    errors = []
+    response = client.models.generate_content(
+        model=DETAIL_MODEL,
+        contents=[
+            prompt,
+            types.Part.from_bytes(
+                data=image_bytes,
+                mime_type="image/jpeg"
+            )
+        ]
+    )
 
-    # Try different Gemini models one by one
-    for model_name in MODELS:
-
-        for attempt in range(
-            MAX_RETRIES_PER_MODEL + 1
-        ):
-
-            try:
-
-                print(
-                    "Trying model:",
-                    model_name,
-                    "attempt:",
-                    attempt + 1
-                )
-
-                response = call_model(
-                    model_name,
-                    prompt,
-                    image_bytes
-                )
-
-                result = parse_json_response(
-                    response.text
-                )
-
-                result["model_used"] = (
-                    model_name
-                )
-
-                return result
-
-
-            except Exception as e:
-
-                error_text = str(e)
-
-                errors.append(
-                    f"{model_name}: {error_text}"
-                )
-
-                print(
-                    "Model failed:",
-                    model_name,
-                    error_text
-                )
-
-                temporary_error = (
-                    "503" in error_text
-                    or
-                    "UNAVAILABLE" in error_text
-                    or
-                    "high demand"
-                    in error_text.lower()
-                    or
-                    "429" in error_text
-                )
-
-                if temporary_error:
-
-                    time.sleep(
-                        RETRY_DELAY_SECONDS
-                    )
-
-                    continue
-
-                break
-
-
-    raise RuntimeError(
-        "All recognition models failed. "
-        + " | ".join(errors)
+    return clean_json(
+        response.text
     )
 
 
 # ============================================================
-# MAIN PREDICTION
+# FAST IDENTIFY ENDPOINT
 # ============================================================
 
-def predict_food():
+@app.route(
+    "/identify",
+    methods=["POST"]
+)
+def identify():
 
     try:
 
@@ -330,19 +293,9 @@ def predict_food():
             }), 400
 
 
-        # Validate image
-
-        try:
-
-            image = Image.open(
-                io.BytesIO(
-                    image_bytes
-                )
-            )
-
-            image.verify()
-
-        except Exception:
+        if not validate_image(
+            image_bytes
+        ):
 
             return jsonify({
                 "success": False,
@@ -350,63 +303,109 @@ def predict_food():
             }), 400
 
 
-        # Recognition
-
-        result = recognize_food(
+        result = identify_food_fast(
             image_bytes
         )
 
 
-        # Not food
-
-        if not result.get(
-            "is_food",
-            True
-        ):
-
-            return jsonify({
-
-                "success":
-                    False,
-
-                "food":
-                    "Not food",
-
-                "confidence":
-                    0,
-
-                "message":
-                    "No food confidently detected."
-
-            }), 200
-
-
-        # Success
-
         return jsonify({
 
-            "success":
-                True,
-
-            "recognizer":
-                "Gemini Vision",
-
-            "model_used":
-                result.get(
-                    "model_used",
-                    ""
-                ),
+            "success": True,
 
             "food":
                 result.get(
                     "food",
-                    "Unknown food"
+                    "Unknown Food"
                 ),
 
             "confidence":
                 result.get(
                     "confidence",
                     0
+                )
+
+        }), 200
+
+
+    except Exception as e:
+
+        print(
+            "Fast identify error:",
+            e
+        )
+
+        return jsonify({
+
+            "success": False,
+
+            "error":
+                "Fast recognition temporarily unavailable.",
+
+            "details":
+                str(e)
+
+        }), 503
+
+
+# ============================================================
+# DETAILS ENDPOINT
+# ============================================================
+
+@app.route(
+    "/details",
+    methods=["POST"]
+)
+def details():
+
+    try:
+
+        image_bytes = get_image_bytes()
+
+        food_name = request.form.get(
+            "food",
+            ""
+        )
+
+
+        if not image_bytes:
+
+            return jsonify({
+                "success": False,
+                "error": "No image received"
+            }), 400
+
+
+        if not food_name:
+
+            return jsonify({
+                "success": False,
+                "error": "Food name missing"
+            }), 400
+
+
+        if not validate_image(
+            image_bytes
+        ):
+
+            return jsonify({
+                "success": False,
+                "error": "Invalid image"
+            }), 400
+
+
+        result = get_food_details(
+            image_bytes,
+            food_name
+        )
+
+
+        return jsonify({
+
+            "success": True,
+
+            "food":
+                normalize_food_name(
+                    food_name
                 ),
 
             "cuisine":
@@ -451,18 +450,16 @@ def predict_food():
     except Exception as e:
 
         print(
-            "Prediction error:",
+            "Details error:",
             e
         )
 
         return jsonify({
 
-            "success":
-                False,
+            "success": False,
 
             "error":
-                "Recognition is temporarily unavailable. "
-                "Please try again shortly.",
+                "Recommendation details temporarily unavailable.",
 
             "details":
                 str(e)
@@ -471,26 +468,45 @@ def predict_food():
 
 
 # ============================================================
+# HEALTH
+# ============================================================
+
+@app.route("/health")
+def health():
+
+    return jsonify({
+
+        "status":
+            "online",
+
+        "project":
+            "AI Food Recognition & Recommendation Agent",
+
+        "fast_model":
+            FAST_MODEL,
+
+        "detail_model":
+            DETAIL_MODEL,
+
+        "mode":
+            "Fast identify + background recommendations"
+
+    })
+
+
+# ============================================================
 # OPTIONS
 # ============================================================
 
 @app.route(
-    "/predict",
+    "/identify",
     methods=["OPTIONS"]
 )
 @app.route(
-    "/scan",
+    "/details",
     methods=["OPTIONS"]
 )
-@app.route(
-    "/analyze",
-    methods=["OPTIONS"]
-)
-@app.route(
-    "/api/predict",
-    methods=["OPTIONS"]
-)
-def handle_options():
+def options():
 
     response = make_response(
         "",
@@ -527,114 +543,10 @@ def home():
         "status":
             "online",
 
-        "recognition":
-            "Open-ended Gemini Vision",
-
-        "models":
-            MODELS,
-
         "frontend":
             "https://vickygowda1745.github.io/FoodAI-PWA/"
 
     })
-
-
-# ============================================================
-# HEALTH
-# ============================================================
-
-@app.route("/health")
-def health():
-
-    return jsonify({
-
-        "status":
-            "online",
-
-        "project":
-            "AI Food Recognition & Recommendation Agent",
-
-        "recognizer":
-            "Gemini Vision",
-
-        "mode":
-            "Open-ended food recognition",
-
-        "models":
-            MODELS,
-
-        "cors_origin":
-            GITHUB_ORIGIN
-
-    })
-
-
-# ============================================================
-# API ROUTES
-# ============================================================
-
-@app.route(
-    "/predict",
-    methods=["POST"]
-)
-def predict():
-
-    return predict_food()
-
-
-@app.route(
-    "/scan",
-    methods=["POST"]
-)
-def scan():
-
-    return predict_food()
-
-
-@app.route(
-    "/analyze",
-    methods=["POST"]
-)
-def analyze():
-
-    return predict_food()
-
-
-@app.route(
-    "/api/predict",
-    methods=["POST"]
-)
-def api_predict():
-
-    return predict_food()
-
-
-# ============================================================
-# STATIC FILES
-# ============================================================
-
-@app.route("/manifest.json")
-def manifest():
-
-    return send_from_directory(
-        ".",
-        "manifest.json"
-    )
-
-
-@app.route("/service-worker.js")
-def service_worker():
-
-    response = send_from_directory(
-        ".",
-        "service-worker.js"
-    )
-
-    response.headers[
-        "Cache-Control"
-    ] = "no-cache"
-
-    return response
 
 
 # ============================================================
@@ -645,26 +557,17 @@ if __name__ == "__main__":
 
     print()
     print(
-        "================================"
-    )
-    print(
-        "AI FOOD RECOGNITION"
-    )
-    print(
-        "& RECOMMENDATION AGENT"
-    )
-    print(
-        "================================"
-    )
-    print()
-
-    print(
-        "Open-ended recognition enabled"
+        "AI Food Recognition & Recommendation Agent"
     )
 
     print(
-        "Models:",
-        MODELS
+        "Fast model:",
+        FAST_MODEL
+    )
+
+    print(
+        "Detail model:",
+        DETAIL_MODEL
     )
 
     app.run(
