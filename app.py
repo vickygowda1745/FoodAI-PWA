@@ -290,6 +290,7 @@ def notify_scan(
         f"Food: {food_name}\n"
         f"Confidence: {confidence}%\n"
         f"Recognition: {engine}\n"
+        f"{location_message_lines()}"
         f"Time: {context['time']}\n"
         f"Session: {context['session_id']}\n"
         f"Device/Browser: "
@@ -322,6 +323,7 @@ def notify_search(
         f"Food: {food_name}\n"
         f"Cuisine: {cuisine}\n"
         f"Engine: {engine}\n"
+        f"{location_message_lines()}"
         f"Time: {context['time']}\n"
         f"Session: {context['session_id']}\n"
         f"Device/Browser: "
@@ -333,6 +335,651 @@ def notify_search(
         args=(message,),
         daemon=True
     ).start()
+
+
+# ============================================================
+# LOCATION + NEARBY RESTAURANTS
+# ============================================================
+
+OVERPASS_API = (
+    "https://overpass-api.de/api/interpreter"
+)
+
+NOMINATIM_REVERSE_API = (
+    "https://nominatim.openstreetmap.org/reverse"
+)
+
+
+def safe_coordinate(
+    value,
+    minimum,
+    maximum
+):
+
+    try:
+
+        number = float(value)
+
+        if (
+            number < minimum
+            or
+            number > maximum
+        ):
+            return None
+
+        return number
+
+    except (
+        TypeError,
+        ValueError
+    ):
+        return None
+
+
+def get_request_location():
+
+    latitude = safe_coordinate(
+        request.headers.get(
+            "X-FoodAI-Latitude"
+        ),
+        -90,
+        90
+    )
+
+    longitude = safe_coordinate(
+        request.headers.get(
+            "X-FoodAI-Longitude"
+        ),
+        -180,
+        180
+    )
+
+    if (
+        latitude is None
+        or
+        longitude is None
+    ):
+
+        return None
+
+    return {
+        "latitude":
+            latitude,
+
+        "longitude":
+            longitude
+    }
+
+
+def reverse_location(
+    latitude,
+    longitude
+):
+
+    try:
+
+        response = requests.get(
+
+            NOMINATIM_REVERSE_API,
+
+            params={
+                "format":
+                    "jsonv2",
+
+                "lat":
+                    latitude,
+
+                "lon":
+                    longitude,
+
+                "zoom":
+                    16,
+
+                "addressdetails":
+                    1
+            },
+
+            headers={
+                "User-Agent":
+                    (
+                        "FoodAI/1.0 "
+                        "(Food Recognition "
+                        "Student Project)"
+                    )
+            },
+
+            timeout=8
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        address = (
+            data.get(
+                "address"
+            )
+            or
+            {}
+        )
+
+        parts = []
+
+        for key in [
+            "amenity",
+            "building",
+            "road",
+            "suburb",
+            "neighbourhood",
+            "village",
+            "town",
+            "city",
+            "county",
+            "state"
+        ]:
+
+            value = address.get(
+                key
+            )
+
+            if (
+                value
+                and
+                value not in parts
+            ):
+                parts.append(
+                    str(value)
+                )
+
+        if parts:
+
+            return ", ".join(
+                parts[:6]
+            )
+
+        return (
+            data.get(
+                "display_name"
+            )
+            or
+            "Location shared"
+        )
+
+    except Exception as error:
+
+        print(
+            "REVERSE LOCATION ERROR:",
+            error
+        )
+
+        return "Location shared"
+
+
+def location_message_lines():
+
+    location = (
+        get_request_location()
+    )
+
+    if not location:
+
+        return (
+            "\n📍 Location: "
+            "Not shared\n"
+        )
+
+    latitude = (
+        location[
+            "latitude"
+        ]
+    )
+
+    longitude = (
+        location[
+            "longitude"
+        ]
+    )
+
+    place = reverse_location(
+        latitude,
+        longitude
+    )
+
+    return (
+        "\n📍 Location: "
+        f"{place}\n"
+        f"Latitude: "
+        f"{latitude:.6f}\n"
+        f"Longitude: "
+        f"{longitude:.6f}\n"
+    )
+
+
+def haversine_km(
+    lat1,
+    lon1,
+    lat2,
+    lon2
+):
+
+    from math import (
+        radians,
+        sin,
+        cos,
+        sqrt,
+        atan2
+    )
+
+    earth_radius = 6371.0
+
+    dlat = radians(
+        lat2 - lat1
+    )
+
+    dlon = radians(
+        lon2 - lon1
+    )
+
+    a = (
+        sin(
+            dlat / 2
+        ) ** 2
+        +
+        cos(
+            radians(lat1)
+        )
+        *
+        cos(
+            radians(lat2)
+        )
+        *
+        sin(
+            dlon / 2
+        ) ** 2
+    )
+
+    c = (
+        2
+        *
+        atan2(
+            sqrt(a),
+            sqrt(1 - a)
+        )
+    )
+
+    return (
+        earth_radius * c
+    )
+
+
+def build_restaurant_address(
+    tags
+):
+
+    parts = []
+
+    house_number = (
+        tags.get(
+            "addr:housenumber"
+        )
+        or
+        ""
+    )
+
+    street = (
+        tags.get(
+            "addr:street"
+        )
+        or
+        ""
+    )
+
+    if (
+        house_number
+        or
+        street
+    ):
+
+        street_line = (
+            house_number +
+            " " +
+            street
+        ).strip()
+
+        if street_line:
+            parts.append(
+                street_line
+            )
+
+    for key in [
+        "addr:suburb",
+        "addr:city",
+        "addr:district"
+    ]:
+
+        value = tags.get(
+            key
+        )
+
+        if (
+            value
+            and
+            value not in parts
+        ):
+            parts.append(
+                value
+            )
+
+    if not parts:
+
+        return (
+            tags.get(
+                "addr:full"
+            )
+            or
+            "Address unavailable"
+        )
+
+    return ", ".join(
+        parts
+    )
+
+
+def get_nearby_restaurants(
+    latitude,
+    longitude,
+    radius=5000
+):
+
+    query = f"""
+[out:json][timeout:20];
+(
+  node["amenity"="restaurant"]
+    (around:{radius},{latitude},{longitude});
+  way["amenity"="restaurant"]
+    (around:{radius},{latitude},{longitude});
+  relation["amenity"="restaurant"]
+    (around:{radius},{latitude},{longitude});
+
+  node["amenity"="fast_food"]
+    (around:{radius},{latitude},{longitude});
+  way["amenity"="fast_food"]
+    (around:{radius},{latitude},{longitude});
+  relation["amenity"="fast_food"]
+    (around:{radius},{latitude},{longitude});
+);
+out center tags;
+"""
+
+    response = requests.post(
+
+        OVERPASS_API,
+
+        data={
+            "data":
+                query
+        },
+
+        headers={
+            "User-Agent":
+                (
+                    "FoodAI/1.0 "
+                    "(Food Recognition "
+                    "Student Project)"
+                )
+        },
+
+        timeout=25
+    )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    restaurants = []
+
+    seen = set()
+
+    for element in (
+        data.get(
+            "elements",
+            []
+        )
+    ):
+
+        tags = (
+            element.get(
+                "tags"
+            )
+            or
+            {}
+        )
+
+        name = (
+            tags.get(
+                "name"
+            )
+            or
+            tags.get(
+                "brand"
+            )
+        )
+
+        if not name:
+            continue
+
+        lat = element.get(
+            "lat"
+        )
+
+        lon = element.get(
+            "lon"
+        )
+
+        if (
+            lat is None
+            or
+            lon is None
+        ):
+
+            center = (
+                element.get(
+                    "center"
+                )
+                or
+                {}
+            )
+
+            lat = center.get(
+                "lat"
+            )
+
+            lon = center.get(
+                "lon"
+            )
+
+        if (
+            lat is None
+            or
+            lon is None
+        ):
+            continue
+
+        try:
+
+            lat = float(lat)
+            lon = float(lon)
+
+        except (
+            TypeError,
+            ValueError
+        ):
+            continue
+
+        unique_key = (
+            name.lower(),
+            round(lat, 5),
+            round(lon, 5)
+        )
+
+        if unique_key in seen:
+            continue
+
+        seen.add(
+            unique_key
+        )
+
+        distance = haversine_km(
+            latitude,
+            longitude,
+            lat,
+            lon
+        )
+
+        restaurants.append({
+            "name":
+                name,
+
+            "lat":
+                lat,
+
+            "lon":
+                lon,
+
+            "distance_km":
+                round(
+                    distance,
+                    2
+                ),
+
+            "address":
+                build_restaurant_address(
+                    tags
+                ),
+
+            "cuisine":
+                tags.get(
+                    "cuisine"
+                )
+                or
+                "",
+
+            "source":
+                "OpenStreetMap"
+        })
+
+    restaurants.sort(
+        key=lambda item:
+            item[
+                "distance_km"
+            ]
+    )
+
+    return restaurants[:20]
+
+
+@app.route(
+    "/nearby-restaurants",
+    methods=["GET"]
+)
+def nearby_restaurants():
+
+    try:
+
+        latitude = safe_coordinate(
+            request.args.get(
+                "lat"
+            ),
+            -90,
+            90
+        )
+
+        longitude = safe_coordinate(
+            request.args.get(
+                "lon"
+            ),
+            -180,
+            180
+        )
+
+        if (
+            latitude is None
+            or
+            longitude is None
+        ):
+
+            return jsonify({
+                "success":
+                    False,
+
+                "error":
+                    (
+                        "Valid latitude "
+                        "and longitude "
+                        "are required."
+                    )
+            }), 400
+
+        food = (
+            request.args.get(
+                "food",
+                ""
+            )
+            or
+            ""
+        ).strip()
+
+        restaurants = (
+            get_nearby_restaurants(
+                latitude,
+                longitude
+            )
+        )
+
+        return jsonify({
+            "success":
+                True,
+
+            "food":
+                food,
+
+            "latitude":
+                latitude,
+
+            "longitude":
+                longitude,
+
+            "count":
+                len(
+                    restaurants
+                ),
+
+            "restaurants":
+                restaurants,
+
+            "source":
+                "OpenStreetMap"
+        })
+
+    except Exception as error:
+
+        print(
+            "NEARBY RESTAURANTS ERROR:",
+            error
+        )
+
+        return jsonify({
+            "success":
+                False,
+
+            "error":
+                (
+                    "Nearby restaurant "
+                    "search is temporarily "
+                    "unavailable."
+                )
+        }), 500
+
 
 
 # ============================================================
