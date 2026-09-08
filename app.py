@@ -7,6 +7,7 @@ import html
 import threading
 import urllib.parse
 import urllib.request
+import requests
 
 from datetime import datetime, timezone
 
@@ -83,7 +84,9 @@ CORS(
             ],
             "allow_headers": [
                 "Content-Type",
-                "X-FoodAI-Session"
+                "X-FoodAI-Session",
+                "X-FoodAI-Latitude",
+                "X-FoodAI-Longitude"
             ]
         }
     }
@@ -111,7 +114,9 @@ def add_cors_headers(response):
             "Access-Control-Allow-Headers"
         ] = (
             "Content-Type, "
-            "X-FoodAI-Session"
+            "X-FoodAI-Session, "
+            "X-FoodAI-Latitude, "
+            "X-FoodAI-Longitude"
         )
 
     return response
