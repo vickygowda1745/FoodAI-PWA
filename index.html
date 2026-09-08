@@ -369,64 +369,6 @@
         }
 
 
-        .location-card {
-            display: none;
-            margin-top: 16px;
-            padding: 15px;
-            border-radius: 15px;
-            background: #334155;
-        }
-
-        .location-title {
-            font-weight: 700;
-            margin-bottom: 8px;
-            font-size: 18px;
-        }
-
-        #locationStatus {
-            margin-top: 8px;
-            color: #cbd5e1;
-            line-height: 1.5;
-        }
-
-        #nearbyButton {
-            display: none;
-            background: #2563eb;
-            color: white;
-        }
-
-        #nearbyResults {
-            display: none;
-            margin-top: 13px;
-        }
-
-        .restaurant-item {
-            padding: 14px;
-            margin-top: 10px;
-            border-radius: 14px;
-            background: #0f172a;
-            border: 1px solid #475569;
-        }
-
-        .restaurant-name {
-            font-size: 17px;
-            font-weight: 700;
-        }
-
-        .restaurant-meta {
-            margin-top: 6px;
-            color: #cbd5e1;
-            line-height: 1.5;
-        }
-
-        .directions-link {
-            display: inline-block;
-            margin-top: 9px;
-            color: #86efac;
-            font-weight: 700;
-            text-decoration: none;
-        }
-
         .footer-note {
             text-align: center;
             color: #64748b;
@@ -687,36 +629,10 @@
             </div>
 
         </div>
-
-        <div
-            id="locationCard"
-            class="location-card"
-        >
-
-            <div class="location-title">
-                📍 Nearby Restaurants
-            </div>
-
-            <div id="locationStatus">
-                Share your location to find restaurants near you.
-            </div>
-
-            <button
-                id="nearbyButton"
-                type="button"
-            >
-                📍 Find Nearby Restaurants
-            </button>
-
-            <div
-                id="nearbyResults"
-            ></div>
-
-        </div>
-
     </div>
 
     <div class="footer-note">
+
         FoodAI uses AI to identify and recommend foods.
         Results may vary depending on image quality and dish presentation.
     </div>
@@ -815,28 +731,7 @@ const searchStatus =
     );
 
 
-const locationCard =
-    document.getElementById(
-        "locationCard"
-    );
 
-const locationStatus =
-    document.getElementById(
-        "locationStatus"
-    );
-
-const nearbyButton =
-    document.getElementById(
-        "nearbyButton"
-    );
-
-const nearbyResults =
-    document.getElementById(
-        "nearbyResults"
-    );
-
-
-let currentLocation = null;
 
 
 let currentStream = null;
@@ -1104,13 +999,12 @@ async function identifyFood(
                 method:
                     "POST",
 
-                headers:
-                    locationHeaders({
+                headers: {
 
-                        "X-FoodAI-Session":
-                            FOODAI_SESSION
+                    "X-FoodAI-Session":
+                        FOODAI_SESSION
 
-                    }),
+                },
 
                 body:
                     formData
@@ -1171,13 +1065,12 @@ async function loadDetails(
                     method:
                         "POST",
 
-                    headers:
-                        locationHeaders({
+                    headers: {
 
-                            "X-FoodAI-Session":
-                                FOODAI_SESSION
+                        "X-FoodAI-Session":
+                            FOODAI_SESSION
 
-                        }),
+                    },
 
                     body:
                         formData
@@ -1372,326 +1265,6 @@ function showSearchImage(
 
 
 
-function getCurrentLocation() {
-
-    return new Promise(
-        (
-            resolve,
-            reject
-        ) => {
-
-            if (
-                !navigator.geolocation
-            ) {
-
-                reject(
-                    new Error(
-                        "Location is not supported."
-                    )
-                );
-
-                return;
-            }
-
-            navigator.geolocation
-                .getCurrentPosition(
-
-                    position => {
-
-                        currentLocation = {
-
-                            latitude:
-                                position.coords.latitude,
-
-                            longitude:
-                                position.coords.longitude
-
-                        };
-
-                        resolve(
-                            currentLocation
-                        );
-                    },
-
-                    error => {
-
-                        reject(
-                            error
-                        );
-                    },
-
-                    {
-
-                        enableHighAccuracy:
-                            true,
-
-                        timeout:
-                            10000,
-
-                        maximumAge:
-                            60000
-
-                    }
-                );
-        }
-    );
-}
-
-
-async function ensureLocation() {
-
-    if (
-        currentLocation
-    ) {
-
-        return currentLocation;
-    }
-
-    locationStatus.textContent =
-        "Requesting location permission...";
-
-    try {
-
-        const location =
-            await getCurrentLocation();
-
-        locationStatus.textContent =
-            "Location ready.";
-
-        nearbyButton.style.display =
-            "block";
-
-        return location;
-
-    } catch (error) {
-
-        console.log(
-            "Location:",
-            error
-        );
-
-        locationStatus.textContent =
-            "Location not shared. FoodAI will continue normally.";
-
-        nearbyButton.style.display =
-            "block";
-
-        return null;
-    }
-}
-
-
-function locationHeaders(
-    headers
-) {
-
-    if (
-        currentLocation
-    ) {
-
-        headers[
-            "X-FoodAI-Latitude"
-        ] =
-            String(
-                currentLocation.latitude
-            );
-
-        headers[
-            "X-FoodAI-Longitude"
-        ] =
-            String(
-                currentLocation.longitude
-            );
-    }
-
-    return headers;
-}
-
-
-async function findNearbyRestaurants() {
-
-    nearbyResults.style.display =
-        "block";
-
-    nearbyResults.innerHTML =
-        "";
-
-    const location =
-        await ensureLocation();
-
-    if (!location) {
-
-        nearbyResults.textContent =
-            "Please allow location access to find nearby restaurants.";
-
-        return;
-    }
-
-    nearbyButton.disabled =
-        true;
-
-    locationStatus.textContent =
-        "Finding nearby restaurants...";
-
-    try {
-
-        const params =
-            new URLSearchParams({
-
-                lat:
-                    location.latitude,
-
-                lon:
-                    location.longitude,
-
-                food:
-                    lastFoodName ||
-                    ""
-
-            });
-
-        const response =
-            await fetch(
-
-                BACKEND_URL +
-                "/nearby-restaurants?" +
-                params.toString()
-
-            );
-
-        const data =
-            await readJsonResponse(
-                response
-            );
-
-        if (
-            !response.ok ||
-            !data.success
-        ) {
-
-            throw new Error(
-                data.error ||
-                "Nearby restaurant search failed."
-            );
-        }
-
-        const restaurants =
-            Array.isArray(
-                data.restaurants
-            )
-                ?
-            data.restaurants
-                :
-            [];
-
-        if (
-            !restaurants.length
-        ) {
-
-            nearbyResults.textContent =
-                "No nearby restaurants found.";
-
-        } else {
-
-            nearbyResults.innerHTML =
-                restaurants
-                    .map(
-                        item => {
-
-                            const name =
-                                escapeHtml(
-                                    item.name ||
-                                    "Restaurant"
-                                );
-
-                            const distance =
-                                item.distance_km != null
-                                    ?
-                                escapeHtml(
-                                    String(
-                                        item.distance_km
-                                    )
-                                ) +
-                                " km"
-                                    :
-                                "Distance unavailable";
-
-                            const address =
-                                escapeHtml(
-                                    item.address ||
-                                    "Address unavailable"
-                                );
-
-                            const directions =
-                                "https://www.google.com/maps/dir/?api=1&destination=" +
-                                encodeURIComponent(
-                                    item.lat
-                                ) +
-                                "," +
-                                encodeURIComponent(
-                                    item.lon
-                                );
-
-                            return (
-                                '<div class="restaurant-item">' +
-
-                                '<div class="restaurant-name">' +
-                                name +
-                                '</div>' +
-
-                                '<div class="restaurant-meta">' +
-                                distance +
-                                '<br>' +
-                                address +
-                                '</div>' +
-
-                                '<a class="directions-link" ' +
-                                'target="_blank" ' +
-                                'rel="noopener noreferrer" ' +
-                                'href="' +
-                                directions +
-                                '">' +
-                                'Directions ↗' +
-                                '</a>' +
-
-                                '</div>'
-                            );
-                        }
-                    )
-                    .join("");
-        }
-
-        locationStatus.textContent =
-            "Nearby restaurants found.";
-
-    } catch (error) {
-
-        console.error(
-            "Nearby restaurants:",
-            error
-        );
-
-        nearbyResults.textContent =
-            "Error: " +
-            error.message;
-
-        locationStatus.textContent =
-            "Nearby restaurant search failed.";
-
-    } finally {
-
-        nearbyButton.disabled =
-            false;
-    }
-}
-
-
-nearbyButton.addEventListener(
-    "click",
-    findNearbyRestaurants
-);
-
-
 async function searchFood() {
 
     const query =
@@ -1716,11 +1289,6 @@ async function searchFood() {
     }
 
     try {
-
-        locationCard.style.display =
-            "block";
-
-        await ensureLocation();
 
         foodSearchButton.disabled =
             true;
@@ -1760,16 +1328,15 @@ async function searchFood() {
                     method:
                         "POST",
 
-                    headers:
-                        locationHeaders({
+                    headers: {
 
-                            "Content-Type":
-                                "application/json",
+                        "Content-Type":
+                            "application/json",
 
-                            "X-FoodAI-Session":
-                                FOODAI_SESSION
+                        "X-FoodAI-Session":
+                            FOODAI_SESSION
 
-                        }),
+                    },
 
                     body:
                         JSON.stringify(
@@ -2051,11 +1618,6 @@ scanButton.addEventListener(
     async () => {
 
         try {
-
-            locationCard.style.display =
-                "block";
-
-            await ensureLocation();
 
             scanButton.disabled =
                 true;
