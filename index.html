@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
 
     <meta
@@ -21,295 +19,450 @@
     >
 
     <title>
-        AI Food Recognition & Recommendation Agent
+        FoodAI - AI Food Recognition & Recommendation Agent
     </title>
 
-
     <style>
-
         * {
             box-sizing: border-box;
         }
 
         body {
-
             margin: 0;
-
-            font-family:
-                Arial,
-                sans-serif;
-
+            min-height: 100vh;
+            font-family: Arial, Helvetica, sans-serif;
             background:
-                #0f172a;
-
-            color:
-                white;
-
+                linear-gradient(
+                    180deg,
+                    #07111f 0%,
+                    #0f172a 45%,
+                    #111827 100%
+                );
+            color: white;
         }
-
 
         .container {
-
             width: 100%;
-
-            max-width: 720px;
-
+            max-width: 760px;
             margin: auto;
-
-            padding: 18px;
-
+            padding: 18px 18px 60px;
         }
 
-
-        h1 {
-
+        .brand {
             text-align: center;
-
-            margin-bottom: 5px;
-
-            font-size: 30px;
-
+            margin-top: 8px;
+            margin-bottom: 20px;
         }
 
+        .brand-name {
+            margin: 0;
+            font-size: 34px;
+            font-weight: 800;
+            letter-spacing: 1px;
+        }
+
+        .brand-ai {
+            color: #22c55e;
+        }
 
         .subtitle {
-
-            text-align: center;
-
+            margin-top: 5px;
             color: #94a3b8;
-
-            margin-bottom: 20px;
-
-            font-size: 17px;
-
+            font-size: 16px;
         }
-
 
         .card {
-
-            background: #1e293b;
-
+            background:
+                rgba(
+                    30,
+                    41,
+                    59,
+                    0.97
+                );
+            border:
+                1px solid
+                rgba(
+                    148,
+                    163,
+                    184,
+                    0.12
+                );
             border-radius: 22px;
-
-            padding: 16px;
-
+            padding: 17px;
             margin-bottom: 18px;
-
+            box-shadow:
+                0 10px 30px
+                rgba(
+                    0,
+                    0,
+                    0,
+                    0.18
+                );
         }
 
+        .card-heading {
+            font-size: 19px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .search-row {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+        }
+
+        #foodSearchInput {
+            flex: 1;
+            min-width: 0;
+            padding: 15px 16px;
+            border-radius: 14px;
+            border: 1px solid #475569;
+            background: #0f172a;
+            color: white;
+            font-size: 17px;
+            outline: none;
+        }
+
+        #foodSearchInput::placeholder {
+            color: #64748b;
+        }
+
+        #foodSearchInput:focus {
+            border-color: #22c55e;
+        }
+
+        #foodSearchButton {
+            width: auto;
+            min-width: 105px;
+            margin: 0;
+            padding: 14px 18px;
+            background: #22c55e;
+            color: white;
+        }
+
+        .or-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 6px 0 18px;
+            color: #64748b;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .or-divider::before,
+        .or-divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: #334155;
+        }
+
+        .camera-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .camera-label-main {
+            font-size: 19px;
+            font-weight: 700;
+        }
+
+        .ai-badge {
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            color: #86efac;
+            background:
+                rgba(
+                    34,
+                    197,
+                    94,
+                    0.13
+                );
+            border:
+                1px solid
+                rgba(
+                    34,
+                    197,
+                    94,
+                    0.22
+                );
+        }
 
         video {
-
             width: 100%;
-
+            display: block;
             border-radius: 18px;
-
             background: black;
-
             object-fit: cover;
-
             max-height: 520px;
-
         }
-
 
         canvas {
             display: none;
         }
 
-
         button {
-
             width: 100%;
-
             border: none;
-
             border-radius: 14px;
-
             padding: 16px;
-
             margin-top: 13px;
-
-            font-size: 19px;
-
+            font-size: 18px;
             font-weight: bold;
-
             cursor: pointer;
-
+            transition:
+                transform 0.15s ease,
+                opacity 0.15s ease;
         }
 
-
-        #scanButton {
-
-            background: #22c55e;
-
-            color: white;
-
+        button:active {
+            transform: scale(0.985);
         }
-
-
-        #switchButton {
-
-            background: #475569;
-
-            color: white;
-
-        }
-
 
         button:disabled {
-
             opacity: 0.55;
-
+            cursor: not-allowed;
         }
 
+        #scanButton {
+            background: #22c55e;
+            color: white;
+        }
 
-        #status {
+        #switchButton {
+            background: #475569;
+            color: white;
+        }
 
+        .status {
             margin-top: 15px;
-
             text-align: center;
-
             color: #cbd5e1;
-
             font-size: 16px;
-
             line-height: 1.5;
-
         }
-
 
         .loading {
-
             color: #facc15 !important;
-
         }
-
 
         .error {
-
             color: #f87171 !important;
-
         }
-
 
         .success {
-
             color: #4ade80 !important;
-
         }
-
 
         .result-card {
-
             display: none;
-
-            background: #1e293b;
-
+            background:
+                rgba(
+                    30,
+                    41,
+                    59,
+                    0.98
+                );
             border-radius: 22px;
-
             padding: 20px;
-
             margin-top: 18px;
-
+            border:
+                1px solid
+                rgba(
+                    34,
+                    197,
+                    94,
+                    0.18
+                );
+            box-shadow:
+                0 12px 35px
+                rgba(
+                    0,
+                    0,
+                    0,
+                    0.22
+                );
         }
 
+        .result-label {
+            color: #94a3b8;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.9px;
+            margin-bottom: 8px;
+        }
+
+        .result-image-wrap {
+            display: none;
+            width: 100%;
+            margin-bottom: 17px;
+        }
+
+        .result-image {
+            width: 100%;
+            max-height: 430px;
+            object-fit: cover;
+            display: block;
+            border-radius: 18px;
+            background: #0f172a;
+        }
+
+        .image-attribution {
+            display: none;
+            margin-top: 8px;
+            color: #94a3b8;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .image-attribution a {
+            color: #86efac;
+            text-decoration: none;
+        }
 
         .food-name {
-
             font-size: 31px;
-
-            font-weight: bold;
-
+            font-weight: 800;
             color: #22c55e;
-
-            margin-bottom: 8px;
-
+            margin-bottom: 7px;
         }
-
 
         .confidence {
-
             color: #cbd5e1;
-
-            font-size: 17px;
-
-            margin-bottom: 16px;
-
+            font-size: 16px;
+            margin-bottom: 13px;
         }
-
 
         .details-loading {
-
             color: #facc15;
-
-            margin: 15px 0;
-
+            margin: 14px 0;
         }
-
 
         .section {
-
             background: #334155;
-
             border-radius: 15px;
-
             padding: 15px;
-
             margin-top: 13px;
-
         }
-
 
         .section-title {
-
-            font-weight: bold;
-
+            font-weight: 700;
             margin-bottom: 7px;
-
-            font-size: 17px;
-
+            font-size: 16px;
+            color: #f8fafc;
         }
-
 
         .section-text {
-
             color: #e2e8f0;
-
-            line-height: 1.5;
-
+            line-height: 1.55;
+            word-break: break-word;
         }
-
 
         #detailsArea {
-
             display: none;
-
         }
 
+        .footer-note {
+            text-align: center;
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.5;
+            margin-top: 22px;
+        }
+
+        @media (max-width: 520px) {
+            .container {
+                padding: 13px 13px 40px;
+            }
+
+            .brand-name {
+                font-size: 29px;
+            }
+
+            .search-row {
+                flex-direction: column;
+            }
+
+            #foodSearchButton {
+                width: 100%;
+            }
+
+            .food-name {
+                font-size: 27px;
+            }
+        }
     </style>
-
 </head>
-
 
 <body>
 
-
 <div class="container">
 
+    <div class="brand">
+        <h1 class="brand-name">
+            FOOD<span class="brand-ai">AI</span>
+        </h1>
 
-    <h1>
-        🍽️ AI Food Recognition
-    </h1>
-
-
-    <div class="subtitle">
-        & Recommendation Agent
+        <div class="subtitle">
+            AI Food Recognition & Recommendation Agent
+        </div>
     </div>
 
+    <div class="card" id="searchCard">
+
+        <div class="card-heading">
+            🔎 Search Food
+        </div>
+
+        <div class="search-row">
+
+            <input
+                type="search"
+                id="foodSearchInput"
+                placeholder="Search biryani, dosa, pizza..."
+                autocomplete="off"
+            >
+
+            <button
+                id="foodSearchButton"
+                type="button"
+            >
+                Search
+            </button>
+
+        </div>
+
+        <div
+            id="searchStatus"
+            class="status"
+            style="display:none;"
+        ></div>
+
+    </div>
+
+    <div class="or-divider">
+        OR SCAN WITH AI
+    </div>
 
     <div class="card">
 
+        <div class="camera-label">
+
+            <div class="camera-label-main">
+                📷 Scan Food
+            </div>
+
+            <div class="ai-badge">
+                Qwen Vision
+            </div>
+
+        </div>
 
         <video
             id="camera"
@@ -318,55 +471,69 @@
             muted
         ></video>
 
-
         <canvas
             id="canvas"
         ></canvas>
 
-
         <button
             id="scanButton"
+            type="button"
         >
             📷 Scan Food
         </button>
 
-
         <button
             id="switchButton"
+            type="button"
         >
             🔄 Switch Camera
         </button>
 
-
         <div
             id="status"
+            class="status"
         >
             Starting camera...
         </div>
 
-
     </div>
-
 
     <div
         id="resultCard"
         class="result-card"
     >
 
+        <div class="result-label">
+            FoodAI Result
+        </div>
+
+        <div
+            id="resultImageWrap"
+            class="result-image-wrap"
+        >
+
+            <img
+                id="resultImage"
+                class="result-image"
+                alt="Food result"
+            >
+
+            <div
+                id="imageAttribution"
+                class="image-attribution"
+            ></div>
+
+        </div>
 
         <div
             id="foodName"
             class="food-name"
-        >
-        </div>
-
+        ></div>
 
         <div
             id="confidence"
             class="confidence"
-        >
-        </div>
-
+        ></div>
 
         <div
             id="detailsLoading"
@@ -375,11 +542,9 @@
             Loading recommendations...
         </div>
 
-
         <div
             id="detailsArea"
         >
-
 
             <div class="section">
 
@@ -390,11 +555,9 @@
                 <div
                     id="cuisine"
                     class="section-text"
-                >
-                </div>
+                ></div>
 
             </div>
-
 
             <div class="section">
 
@@ -405,13 +568,14 @@
                 <div
                     id="description"
                     class="section-text"
-                >
-                </div>
+                ></div>
 
             </div>
 
-
-            <div class="section">
+            <div
+                class="section"
+                id="visibleItemsSection"
+            >
 
                 <div class="section-title">
                     👀 Visible Items
@@ -420,11 +584,9 @@
                 <div
                     id="visibleItems"
                     class="section-text"
-                >
-                </div>
+                ></div>
 
             </div>
-
 
             <div class="section">
 
@@ -435,11 +597,9 @@
                 <div
                     id="recommendation"
                     class="section-text"
-                >
-                </div>
+                ></div>
 
             </div>
-
 
             <div class="section">
 
@@ -450,11 +610,9 @@
                 <div
                     id="healthNote"
                     class="section-text"
-                >
-                </div>
+                ></div>
 
             </div>
-
 
             <div class="section">
 
@@ -465,23 +623,22 @@
                 <div
                     id="similarFood"
                     class="section-text"
-                >
-                </div>
+                ></div>
 
             </div>
 
-
         </div>
-
 
     </div>
 
+    <div class="footer-note">
+        FoodAI uses AI to identify and recommend foods.
+        Results may vary depending on image quality and dish presentation.
+    </div>
 
 </div>
 
-
 <script>
-
 
 const BACKEND_URL =
     "https://foodai-pwa.onrender.com";
@@ -492,58 +649,84 @@ const video =
         "camera"
     );
 
-
 const canvas =
     document.getElementById(
         "canvas"
     );
-
 
 const scanButton =
     document.getElementById(
         "scanButton"
     );
 
-
 const switchButton =
     document.getElementById(
         "switchButton"
     );
-
 
 const statusText =
     document.getElementById(
         "status"
     );
 
-
 const resultCard =
     document.getElementById(
         "resultCard"
     );
 
+const resultImageWrap =
+    document.getElementById(
+        "resultImageWrap"
+    );
+
+const resultImage =
+    document.getElementById(
+        "resultImage"
+    );
+
+const imageAttribution =
+    document.getElementById(
+        "imageAttribution"
+    );
 
 const foodName =
     document.getElementById(
         "foodName"
     );
 
-
 const confidence =
     document.getElementById(
         "confidence"
     );
-
 
 const detailsLoading =
     document.getElementById(
         "detailsLoading"
     );
 
-
 const detailsArea =
     document.getElementById(
         "detailsArea"
+    );
+
+const visibleItemsSection =
+    document.getElementById(
+        "visibleItemsSection"
+    );
+
+const foodSearchInput =
+    document.getElementById(
+        "foodSearchInput"
+    );
+
+const foodSearchButton =
+    document.getElementById(
+        "foodSearchButton"
+    );
+
+const searchStatus =
+    document.getElementById(
+        "searchStatus"
     );
 
 
@@ -552,22 +735,69 @@ let currentStream = null;
 let facingMode =
     "environment";
 
-
 let lastBlob = null;
 
 let lastFoodName = null;
 
+let lastCapturedImageUrl = null;
 
 
-// ============================================================
-// CAMERA
-// ============================================================
+function getFoodAISession() {
+
+    let session =
+        localStorage.getItem(
+            "foodai_session"
+        );
+
+    if (!session) {
+
+        if (
+            window.crypto &&
+            crypto.randomUUID
+        ) {
+
+            session =
+                crypto.randomUUID();
+
+        } else {
+
+            session =
+                "foodai-" +
+                Date.now() +
+                "-" +
+                Math.random()
+                    .toString(36)
+                    .slice(2);
+
+        }
+
+        localStorage.setItem(
+            "foodai_session",
+            session
+        );
+    }
+
+    return session;
+}
+
+
+const FOODAI_SESSION =
+    getFoodAISession();
+
 
 async function startCamera() {
 
-
     try {
 
+        if (
+            !navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia
+        ) {
+
+            throw new Error(
+                "Camera is not supported by this browser."
+            );
+        }
 
         if (currentStream) {
 
@@ -577,9 +807,7 @@ async function startCamera() {
                     track =>
                         track.stop()
                 );
-
         }
-
 
         const constraints = {
 
@@ -598,10 +826,10 @@ async function startCamera() {
 
             },
 
-            audio: false
+            audio:
+                false
 
         };
-
 
         currentStream =
             await navigator
@@ -610,53 +838,38 @@ async function startCamera() {
                     constraints
                 );
 
-
         video.srcObject =
             currentStream;
 
+        await video.play();
 
         statusText.textContent =
             "Camera ready. Show food and tap Scan Food.";
 
-
         statusText.className =
-            "success";
+            "status success";
 
-
-    }
-
-    catch (error) {
-
+    } catch (error) {
 
         console.error(
+            "Camera error:",
             error
         );
 
-
         statusText.textContent =
-            "Camera permission failed. Allow camera access.";
-
+            "Camera permission failed. Please allow camera access.";
 
         statusText.className =
-            "error";
-
-
+            "status error";
     }
-
 }
 
-
-
-// ============================================================
-// SWITCH CAMERA
-// ============================================================
 
 switchButton.addEventListener(
 
     "click",
 
     async () => {
-
 
         facingMode =
             facingMode ===
@@ -666,27 +879,19 @@ switchButton.addEventListener(
                 :
             "environment";
 
-
         await startCamera();
-
-
     }
-
 );
 
 
-
-// ============================================================
-// CAPTURE SMALL IMAGE
-// ============================================================
-
 function captureImage() {
-
 
     return new Promise(
 
-        (resolve, reject) => {
-
+        (
+            resolve,
+            reject
+        ) => {
 
             if (
                 !video.videoWidth ||
@@ -700,62 +905,46 @@ function captureImage() {
                 );
 
                 return;
-
             }
-
-
-            /*
-            Smaller image = faster upload
-            and faster AI processing
-            */
 
             const TARGET_WIDTH =
                 640;
-
 
             const ratio =
                 video.videoHeight /
                 video.videoWidth;
 
-
             const TARGET_HEIGHT =
-                Math.round(
-                    TARGET_WIDTH *
-                    ratio
+                Math.max(
+                    1,
+                    Math.round(
+                        TARGET_WIDTH *
+                        ratio
+                    )
                 );
-
 
             canvas.width =
                 TARGET_WIDTH;
 
-
             canvas.height =
                 TARGET_HEIGHT;
-
 
             const ctx =
                 canvas.getContext(
                     "2d"
                 );
 
-
             ctx.drawImage(
-
                 video,
-
                 0,
                 0,
-
                 TARGET_WIDTH,
                 TARGET_HEIGHT
-
             );
-
 
             canvas.toBlob(
 
                 blob => {
-
 
                     if (!blob) {
 
@@ -766,55 +955,34 @@ function captureImage() {
                         );
 
                         return;
-
                     }
-
 
                     resolve(
                         blob
                     );
-
-
                 },
 
                 "image/jpeg",
 
-                0.72
-
+                0.75
             );
-
-
         }
-
     );
-
 }
 
-
-
-// ============================================================
-// FAST IDENTIFICATION
-// ============================================================
 
 async function identifyFood(
     blob
 ) {
 
-
     const formData =
         new FormData();
 
-
     formData.append(
-
         "image",
-
         blob,
-
         "food.jpg"
-
     );
-
 
     const response =
         await fetch(
@@ -827,17 +995,23 @@ async function identifyFood(
                 method:
                     "POST",
 
+                headers: {
+
+                    "X-FoodAI-Session":
+                        FOODAI_SESSION
+
+                },
+
                 body:
                     formData
 
             }
-
         );
 
-
     const data =
-        await response.json();
-
+        await readJsonResponse(
+            response
+        );
 
     if (
         !response.ok ||
@@ -845,57 +1019,36 @@ async function identifyFood(
     ) {
 
         throw new Error(
-
             data.error ||
+            data.message ||
             "Food recognition failed."
-
         );
-
     }
 
-
     return data;
-
 }
 
-
-
-// ============================================================
-// DETAILS
-// ============================================================
 
 async function loadDetails(
     blob,
     food
 ) {
 
-
     try {
-
 
         const formData =
             new FormData();
 
-
         formData.append(
-
             "image",
-
             blob,
-
             "food.jpg"
-
         );
-
 
         formData.append(
-
             "food",
-
             food
-
         );
-
 
         const response =
             await fetch(
@@ -908,17 +1061,23 @@ async function loadDetails(
                     method:
                         "POST",
 
+                    headers: {
+
+                        "X-FoodAI-Session":
+                            FOODAI_SESSION
+
+                    },
+
                     body:
                         formData
 
                 }
-
             );
 
-
         const data =
-            await response.json();
-
+            await readJsonResponse(
+                response
+            );
 
         if (
             !response.ok ||
@@ -926,60 +1085,384 @@ async function loadDetails(
         ) {
 
             throw new Error(
-
                 data.error ||
-                "Recommendation failed."
-
+                "Recommendations failed."
             );
-
         }
 
-
         showDetails(
-            data
+            data,
+            true
         );
 
-
-    }
-
-    catch (error) {
-
+    } catch (error) {
 
         console.error(
+            "Details error:",
             error
         );
-
 
         detailsLoading.textContent =
             "Recommendations temporarily unavailable.";
 
-
         detailsLoading.className =
-            "error";
-
-
+            "details-loading error";
     }
-
 }
 
 
+function showCapturedImage(
+    blob
+) {
 
-// ============================================================
-// DISPLAY DETAILS
-// ============================================================
+    if (
+        lastCapturedImageUrl
+    ) {
 
-function showDetails(
+        URL.revokeObjectURL(
+            lastCapturedImageUrl
+        );
+    }
+
+    lastCapturedImageUrl =
+        URL.createObjectURL(
+            blob
+        );
+
+    resultImage.src =
+        lastCapturedImageUrl;
+
+    resultImage.alt =
+        "Captured food";
+
+    resultImageWrap.style.display =
+        "block";
+
+    imageAttribution.style.display =
+        "none";
+
+    imageAttribution.innerHTML =
+        "";
+}
+
+
+function showSearchImage(
     data
 ) {
 
+    const imageUrl =
+        data.image_url ||
+        "";
+
+    if (!imageUrl) {
+
+        resultImage.removeAttribute(
+            "src"
+        );
+
+        resultImageWrap.style.display =
+            "none";
+
+        imageAttribution.style.display =
+            "none";
+
+        imageAttribution.innerHTML =
+            "";
+
+        return;
+    }
+
+    resultImage.src =
+        imageUrl;
+
+    resultImage.alt =
+        data.food ||
+        "Food image";
+
+    resultImageWrap.style.display =
+        "block";
+
+    let attributionParts = [];
+
+    if (data.image_author) {
+
+        attributionParts.push(
+            "Author: " +
+            escapeHtml(
+                data.image_author
+            )
+        );
+    }
+
+    if (data.image_license) {
+
+        if (
+            data.image_license_url
+        ) {
+
+            attributionParts.push(
+                '<a href="' +
+                escapeAttribute(
+                    data.image_license_url
+                ) +
+                '" target="_blank" rel="noopener noreferrer">' +
+                escapeHtml(
+                    data.image_license
+                ) +
+                "</a>"
+            );
+
+        } else {
+
+            attributionParts.push(
+                escapeHtml(
+                    data.image_license
+                )
+            );
+        }
+    }
+
+    if (
+        data.image_page_url
+    ) {
+
+        attributionParts.push(
+            '<a href="' +
+            escapeAttribute(
+                data.image_page_url
+            ) +
+            '" target="_blank" rel="noopener noreferrer">' +
+            "Wikimedia Commons" +
+            "</a>"
+        );
+    }
+
+    if (
+        attributionParts.length
+    ) {
+
+        imageAttribution.innerHTML =
+            attributionParts.join(
+                " • "
+            );
+
+        imageAttribution.style.display =
+            "block";
+
+    } else {
+
+        imageAttribution.innerHTML =
+            "Image source: Wikimedia Commons";
+
+        imageAttribution.style.display =
+            "block";
+    }
+}
+
+
+async function searchFood() {
+
+    const query =
+        foodSearchInput
+            .value
+            .trim();
+
+    if (!query) {
+
+        searchStatus.style.display =
+            "block";
+
+        searchStatus.textContent =
+            "Enter a food name first.";
+
+        searchStatus.className =
+            "status error";
+
+        foodSearchInput.focus();
+
+        return;
+    }
+
+    try {
+
+        foodSearchButton.disabled =
+            true;
+
+        searchStatus.style.display =
+            "block";
+
+        searchStatus.textContent =
+            "Searching FoodAI...";
+
+        searchStatus.className =
+            "status loading";
+
+        resultCard.style.display =
+            "none";
+
+        detailsArea.style.display =
+            "none";
+
+        detailsLoading.style.display =
+            "block";
+
+        detailsLoading.textContent =
+            "Loading food information...";
+
+        detailsLoading.className =
+            "details-loading";
+
+        const response =
+            await fetch(
+
+                BACKEND_URL +
+                "/search",
+
+                {
+
+                    method:
+                        "POST",
+
+                    headers: {
+
+                        "Content-Type":
+                            "application/json",
+
+                        "X-FoodAI-Session":
+                            FOODAI_SESSION
+
+                    },
+
+                    body:
+                        JSON.stringify(
+                            {
+                                query:
+                                    query
+                            }
+                        )
+
+                }
+            );
+
+        const data =
+            await readJsonResponse(
+                response
+            );
+
+        if (
+            !response.ok ||
+            !data.success
+        ) {
+
+            throw new Error(
+                data.error ||
+                "Food search failed."
+            );
+        }
+
+        lastFoodName =
+            data.food;
+
+        lastBlob =
+            null;
+
+        resultCard.style.display =
+            "block";
+
+        showSearchImage(
+            data
+        );
+
+        foodName.textContent =
+            data.food ||
+            query;
+
+        confidence.textContent =
+            "Search result";
+
+        showDetails(
+            data,
+            false
+        );
+
+        searchStatus.textContent =
+            "Food found.";
+
+        searchStatus.className =
+            "status success";
+
+        resultCard.scrollIntoView(
+            {
+                behavior:
+                    "smooth",
+
+                block:
+                    "start"
+            }
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Search error:",
+            error
+        );
+
+        searchStatus.style.display =
+            "block";
+
+        searchStatus.textContent =
+            "Error: " +
+            error.message;
+
+        searchStatus.className =
+            "status error";
+
+    } finally {
+
+        foodSearchButton.disabled =
+            false;
+    }
+}
+
+
+foodSearchButton.addEventListener(
+
+    "click",
+
+    searchFood
+);
+
+
+foodSearchInput.addEventListener(
+
+    "keydown",
+
+    event => {
+
+        if (
+            event.key ===
+            "Enter"
+        ) {
+
+            event.preventDefault();
+
+            searchFood();
+        }
+    }
+);
+
+
+function showDetails(
+    data,
+    showVisibleItems
+) {
 
     detailsLoading.style.display =
         "none";
 
-
     detailsArea.style.display =
         "block";
-
 
     document
         .getElementById(
@@ -989,7 +1472,6 @@ function showDetails(
         data.cuisine ||
         "Unknown";
 
-
     document
         .getElementById(
             "description"
@@ -997,7 +1479,6 @@ function showDetails(
         .textContent =
         data.description ||
         "No description available.";
-
 
     const items =
         Array.isArray(
@@ -1008,18 +1489,29 @@ function showDetails(
             :
         [];
 
+    if (
+        showVisibleItems
+    ) {
 
-    document
-        .getElementById(
-            "visibleItems"
-        )
-        .textContent =
-        items.length
-            ?
-        items.join(", ")
-            :
-        "No additional items identified.";
+        visibleItemsSection.style.display =
+            "block";
 
+        document
+            .getElementById(
+                "visibleItems"
+            )
+            .textContent =
+            items.length
+                ?
+            items.join(", ")
+                :
+            "No additional visible items identified.";
+
+    } else {
+
+        visibleItemsSection.style.display =
+            "none";
+    }
 
     document
         .getElementById(
@@ -1029,15 +1521,13 @@ function showDetails(
         data.recommendation ||
         "No recommendation available.";
 
-
     document
         .getElementById(
             "healthNote"
         )
         .textContent =
         data.health_note ||
-        "Nutrition depends on ingredients and portion size.";
-
+        "Nutrition depends on ingredients, preparation and portion size.";
 
     document
         .getElementById(
@@ -1046,14 +1536,75 @@ function showDetails(
         .textContent =
         data.similar_food ||
         "No similar food suggested.";
-
 }
 
 
+async function readJsonResponse(
+    response
+) {
 
-// ============================================================
-// SCAN BUTTON
-// ============================================================
+    const text =
+        await response.text();
+
+    try {
+
+        return JSON.parse(
+            text
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Invalid server response:",
+            text
+        );
+
+        throw new Error(
+            "FoodAI server returned an invalid response."
+        );
+    }
+}
+
+
+function escapeHtml(
+    value
+) {
+
+    return String(
+        value ?? ""
+    )
+        .replaceAll(
+            "&",
+            "&amp;"
+        )
+        .replaceAll(
+            "<",
+            "&lt;"
+        )
+        .replaceAll(
+            ">",
+            "&gt;"
+        )
+        .replaceAll(
+            '"',
+            "&quot;"
+        )
+        .replaceAll(
+            "'",
+            "&#039;"
+        );
+}
+
+
+function escapeAttribute(
+    value
+) {
+
+    return escapeHtml(
+        value
+    );
+}
+
 
 scanButton.addEventListener(
 
@@ -1061,74 +1612,56 @@ scanButton.addEventListener(
 
     async () => {
 
-
         try {
-
 
             scanButton.disabled =
                 true;
 
-
             resultCard.style.display =
                 "none";
-
 
             detailsArea.style.display =
                 "none";
 
-
             detailsLoading.style.display =
                 "block";
-
-
-            detailsLoading.className =
-                "details-loading";
-
 
             detailsLoading.textContent =
                 "Loading recommendations...";
 
+            detailsLoading.className =
+                "details-loading";
 
             statusText.textContent =
                 "⚡ Identifying food...";
 
-
             statusText.className =
-                "loading";
-
-
-            // Capture once
+                "status loading";
 
             const blob =
                 await captureImage();
 
-
             lastBlob =
                 blob;
-
-
-            // FAST recognition
 
             const result =
                 await identifyFood(
                     blob
                 );
 
-
             lastFoodName =
                 result.food;
-
-
-            // Show immediately
 
             resultCard.style.display =
                 "block";
 
+            showCapturedImage(
+                blob
+            );
 
             foodName.textContent =
                 result.food ||
                 "Unknown Food";
-
 
             confidence.textContent =
                 "Confidence: " +
@@ -1138,75 +1671,54 @@ scanButton.addEventListener(
                 ) +
                 "%";
 
-
             statusText.textContent =
                 "✅ Food identified";
 
-
             statusText.className =
-                "success";
-
-
-            /*
-            Load recommendation AFTER
-            food name is already visible
-            */
+                "status success";
 
             loadDetails(
-
                 blob,
-
                 result.food
-
             );
 
+            resultCard.scrollIntoView(
+                {
+                    behavior:
+                        "smooth",
 
-        }
+                    block:
+                        "start"
+                }
+            );
 
-        catch (error) {
-
+        } catch (error) {
 
             console.error(
+                "Scan error:",
                 error
             );
-
 
             statusText.textContent =
                 "Error: " +
                 error.message;
 
-
             statusText.className =
-                "error";
+                "status error";
 
-
-        }
-
-        finally {
-
+        } finally {
 
             scanButton.disabled =
                 false;
-
-
         }
-
-
     }
-
 );
 
-
-
-// ============================================================
-// SERVICE WORKER
-// ============================================================
 
 if (
     "serviceWorker"
     in navigator
 ) {
-
 
     window.addEventListener(
 
@@ -1214,39 +1726,28 @@ if (
 
         () => {
 
-
             navigator
                 .serviceWorker
                 .register(
                     "service-worker.js"
                 )
                 .catch(
-                    error =>
+                    error => {
+
                         console.log(
+                            "Service worker:",
                             error
-                        )
+                        );
+                    }
                 );
-
-
         }
-
     );
-
-
 }
 
 
-
-// ============================================================
-// START CAMERA
-// ============================================================
-
 startCamera();
-
 
 </script>
 
-
 </body>
-
 </html>
