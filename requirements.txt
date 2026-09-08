@@ -3,3 +3,4 @@ flask-cors==6.0.1
 gunicorn==26.0.0
 groq
 Pillow==12.3.0
+requests
