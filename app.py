@@ -65,6 +65,17 @@ IMAGE_CACHE = {}
 
 app = Flask(__name__)
 
+GOOGLE_MAPS_API_KEY = os.getenv(
+    "GOOGLE_MAPS_API_KEY",
+    ""
+).strip()
+
+GOOGLE_PLACES_NEARBY_URL = (
+    "https://places.googleapis.com/"
+    "v1/places:searchNearby"
+)
+
+
 app.config[
     "MAX_CONTENT_LENGTH"
 ] = MAX_IMAGE_SIZE
@@ -697,339 +708,251 @@ def get_nearby_restaurants(
     longitude
 ):
 
-    search_radii = [
-        2000,
-        5000,
-        10000,
-        20000
-    ]
+    if not GOOGLE_MAPS_API_KEY:
 
-    last_error = None
-
-
-    for radius in search_radii:
-
-        print(
-            "Searching nearby food places within:",
-            radius,
-            "meters"
+        raise RuntimeError(
+            "GOOGLE_MAPS_API_KEY is not configured."
         )
 
 
-        query = f"""
-[out:json][timeout:20];
-(
-  node["amenity"="restaurant"]
-    (around:{radius},{latitude},{longitude});
-  way["amenity"="restaurant"]
-    (around:{radius},{latitude},{longitude});
-  relation["amenity"="restaurant"]
-    (around:{radius},{latitude},{longitude});
+    payload = {
 
-  node["amenity"="fast_food"]
-    (around:{radius},{latitude},{longitude});
-  way["amenity"="fast_food"]
-    (around:{radius},{latitude},{longitude});
-  relation["amenity"="fast_food"]
-    (around:{radius},{latitude},{longitude});
+        "includedTypes": [
+            "restaurant",
+            "cafe",
+            "fast_food_restaurant"
+        ],
 
-  node["amenity"="cafe"]
-    (around:{radius},{latitude},{longitude});
-  way["amenity"="cafe"]
-    (around:{radius},{latitude},{longitude});
-  relation["amenity"="cafe"]
-    (around:{radius},{latitude},{longitude});
+        "maxResultCount": 20,
 
-  node["amenity"="food_court"]
-    (around:{radius},{latitude},{longitude});
-  way["amenity"="food_court"]
-    (around:{radius},{latitude},{longitude});
-  relation["amenity"="food_court"]
-    (around:{radius},{latitude},{longitude});
+        "rankPreference":
+            "DISTANCE",
 
-  node["shop"="bakery"]
-    (around:{radius},{latitude},{longitude});
-  way["shop"="bakery"]
-    (around:{radius},{latitude},{longitude});
-  relation["shop"="bakery"]
-    (around:{radius},{latitude},{longitude});
-);
-out center tags;
-"""
+        "locationRestriction": {
 
+            "circle": {
 
-        for api_url in OVERPASS_APIS:
+                "center": {
+                    "latitude":
+                        float(latitude),
 
-            try:
+                    "longitude":
+                        float(longitude)
+                },
 
-                print(
-                    "Trying Overpass:",
-                    api_url
-                )
+                "radius":
+                    5000.0
+            }
+        }
+    }
 
 
-                response = requests.post(
+    headers = {
 
-                    api_url,
+        "Content-Type":
+            "application/json",
 
-                    data={
-                        "data":
-                            query
-                    },
+        "X-Goog-Api-Key":
+            GOOGLE_MAPS_API_KEY,
 
-                    headers={
-                        "User-Agent":
-                            (
-                                "FoodAI/1.0 "
-                                "(Food Recognition Student Project)"
-                            ),
-
-                        "Accept":
-                            "application/json"
-                    },
-
-                    timeout=20
-                )
-
-
-                response.raise_for_status()
-
-
-                data = response.json()
-
-
-                restaurants = []
-
-                seen = set()
-
-
-                for element in (
-                    data.get(
-                        "elements",
-                        []
-                    )
-                ):
-
-                    tags = (
-                        element.get(
-                            "tags"
-                        )
-                        or
-                        {}
-                    )
-
-
-                    name = (
-                        tags.get(
-                            "name"
-                        )
-                        or
-                        tags.get(
-                            "brand"
-                        )
-                    )
-
-
-                    if not name:
-                        continue
-
-
-                    lat = element.get(
-                        "lat"
-                    )
-
-                    lon = element.get(
-                        "lon"
-                    )
-
-
-                    if (
-                        lat is None
-                        or
-                        lon is None
-                    ):
-
-                        center = (
-                            element.get(
-                                "center"
-                            )
-                            or
-                            {}
-                        )
-
-                        lat = center.get(
-                            "lat"
-                        )
-
-                        lon = center.get(
-                            "lon"
-                        )
-
-
-                    if (
-                        lat is None
-                        or
-                        lon is None
-                    ):
-                        continue
-
-
-                    try:
-
-                        lat = float(
-                            lat
-                        )
-
-                        lon = float(
-                            lon
-                        )
-
-                    except (
-                        TypeError,
-                        ValueError
-                    ):
-                        continue
-
-
-                    unique_key = (
-                        name.lower(),
-                        round(
-                            lat,
-                            5
-                        ),
-                        round(
-                            lon,
-                            5
-                        )
-                    )
-
-
-                    if unique_key in seen:
-                        continue
-
-
-                    seen.add(
-                        unique_key
-                    )
-
-
-                    distance = (
-                        haversine_km(
-                            latitude,
-                            longitude,
-                            lat,
-                            lon
-                        )
-                    )
-
-
-                    category = (
-                        tags.get(
-                            "amenity"
-                        )
-                        or
-                        tags.get(
-                            "shop"
-                        )
-                        or
-                        ""
-                    )
-
-
-                    restaurants.append({
-
-                        "name":
-                            name,
-
-                        "lat":
-                            lat,
-
-                        "lon":
-                            lon,
-
-                        "distance_km":
-                            round(
-                                distance,
-                                2
-                            ),
-
-                        "address":
-                            build_restaurant_address(
-                                tags
-                            ),
-
-                        "cuisine":
-                            tags.get(
-                                "cuisine"
-                            )
-                            or
-                            "",
-
-                        "category":
-                            category,
-
-                        "source":
-                            "OpenStreetMap"
-
-                    })
-
-
-                restaurants.sort(
-                    key=lambda item:
-                        item[
-                            "distance_km"
-                        ]
-                )
-
-
-                if restaurants:
-
-                    print(
-                        "Nearby places found:",
-                        len(
-                            restaurants
-                        ),
-                        "within",
-                        radius,
-                        "meters"
-                    )
-
-                    return restaurants[:30]
-
-
-                print(
-                    "No places found within",
-                    radius,
-                    "meters"
-                )
-
-
-            except Exception as error:
-
-                last_error = error
-
-                print(
-                    "Overpass failed:",
-                    api_url,
-                    repr(
-                        error
-                    )
-                )
-
-                continue
-
-
-    if last_error:
-
-        print(
-            "Final Overpass error:",
-            repr(
-                last_error
+        "X-Goog-FieldMask":
+            (
+                "places.id,"
+                "places.displayName,"
+                "places.formattedAddress,"
+                "places.location,"
+                "places.primaryType,"
+                "places.types"
             )
+    }
+
+
+    response = requests.post(
+
+        GOOGLE_PLACES_NEARBY_URL,
+
+        json=payload,
+
+        headers=headers,
+
+        timeout=20
+    )
+
+
+    if not response.ok:
+
+        print(
+            "GOOGLE PLACES ERROR:",
+            response.status_code,
+            response.text
+        )
+
+        response.raise_for_status()
+
+
+    data = response.json()
+
+
+    restaurants = []
+
+
+    for place in data.get(
+        "places",
+        []
+    ):
+
+        display_name = (
+            place.get(
+                "displayName"
+            )
+            or
+            {}
         )
 
 
-    return []
+        name = (
+            display_name.get(
+                "text"
+            )
+            or
+            "Restaurant"
+        )
+
+
+        location = (
+            place.get(
+                "location"
+            )
+            or
+            {}
+        )
+
+
+        lat = location.get(
+            "latitude"
+        )
+
+        lon = location.get(
+            "longitude"
+        )
+
+
+        if (
+            lat is None
+            or
+            lon is None
+        ):
+            continue
+
+
+        try:
+
+            lat = float(lat)
+            lon = float(lon)
+
+        except (
+            TypeError,
+            ValueError
+        ):
+            continue
+
+
+        distance = haversine_km(
+
+            float(latitude),
+            float(longitude),
+
+            lat,
+            lon
+        )
+
+
+        primary_type = (
+            place.get(
+                "primaryType"
+            )
+            or
+            "restaurant"
+        )
+
+
+        cuisine = (
+            primary_type
+            .replace(
+                "_restaurant",
+                ""
+            )
+            .replace(
+                "_",
+                " "
+            )
+            .title()
+        )
+
+
+        if cuisine.lower() in (
+            "restaurant",
+            "cafe",
+            "fast food"
+        ):
+
+            cuisine = ""
+
+
+        restaurants.append({
+
+            "name":
+                name,
+
+            "lat":
+                lat,
+
+            "lon":
+                lon,
+
+            "distance_km":
+                round(
+                    distance,
+                    2
+                ),
+
+            "address":
+                (
+                    place.get(
+                        "formattedAddress"
+                    )
+                    or
+                    "Address unavailable"
+                ),
+
+            "cuisine":
+                cuisine,
+
+            "category":
+                primary_type,
+
+            "place_id":
+                (
+                    place.get(
+                        "id"
+                    )
+                    or
+                    ""
+                ),
+
+            "source":
+                "Google Maps"
+
+        })
+
+
+    restaurants.sort(
+        key=lambda item:
+            item["distance_km"]
+    )
+
+
+    return restaurants[:20]
 
 
 @app.route(
