@@ -308,6 +308,33 @@ def notify_scan(
     ).start()
 
 
+def notify_search(
+    query,
+    food_name,
+    cuisine,
+    engine,
+    context
+):
+
+    message = (
+        "🔎 FOODAI — NEW SEARCH\n\n"
+        f"Search: {query}\n"
+        f"Food: {food_name}\n"
+        f"Cuisine: {cuisine}\n"
+        f"Engine: {engine}\n"
+        f"Time: {context['time']}\n"
+        f"Session: {context['session_id']}\n"
+        f"Device/Browser: "
+        f"{context['user_agent']}"
+    )
+
+    threading.Thread(
+        target=send_telegram_message,
+        args=(message,),
+        daemon=True
+    ).start()
+
+
 # ============================================================
 # IMAGE HELPERS
 # ============================================================
@@ -1871,6 +1898,10 @@ def search():
 
     try:
 
+        search_context = (
+            get_scan_context()
+        )
+
         data = (
             request.get_json(
                 silent=True
@@ -1930,6 +1961,20 @@ def search():
             get_wikimedia_food_image(
                 food_name
             )
+        )
+
+        notify_search(
+            query,
+            food_name,
+            result.get(
+                "cuisine",
+                "Unknown"
+            ),
+            result.get(
+                "engine",
+                PRIMARY_MODEL
+            ),
+            search_context
         )
 
         return jsonify({
@@ -2124,7 +2169,7 @@ def home():
 
             "Food recommendations",
 
-            "Telegram scan notifications",
+            "Telegram scan and search notifications",
 
             "Location and nearby restaurants coming next"
 
