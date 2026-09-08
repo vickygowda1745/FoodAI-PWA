@@ -694,12 +694,30 @@ def build_restaurant_address(
 
 def get_nearby_restaurants(
     latitude,
-    longitude,
-    radius=5000
+    longitude
 ):
 
-    query = f"""
-[out:json][timeout:15];
+    search_radii = [
+        2000,
+        5000,
+        10000,
+        20000
+    ]
+
+    last_error = None
+
+
+    for radius in search_radii:
+
+        print(
+            "Searching nearby food places within:",
+            radius,
+            "meters"
+        )
+
+
+        query = f"""
+[out:json][timeout:20];
 (
   node["amenity"="restaurant"]
     (around:{radius},{latitude},{longitude});
@@ -714,248 +732,304 @@ def get_nearby_restaurants(
     (around:{radius},{latitude},{longitude});
   relation["amenity"="fast_food"]
     (around:{radius},{latitude},{longitude});
+
+  node["amenity"="cafe"]
+    (around:{radius},{latitude},{longitude});
+  way["amenity"="cafe"]
+    (around:{radius},{latitude},{longitude});
+  relation["amenity"="cafe"]
+    (around:{radius},{latitude},{longitude});
+
+  node["amenity"="food_court"]
+    (around:{radius},{latitude},{longitude});
+  way["amenity"="food_court"]
+    (around:{radius},{latitude},{longitude});
+  relation["amenity"="food_court"]
+    (around:{radius},{latitude},{longitude});
+
+  node["shop"="bakery"]
+    (around:{radius},{latitude},{longitude});
+  way["shop"="bakery"]
+    (around:{radius},{latitude},{longitude});
+  relation["shop"="bakery"]
+    (around:{radius},{latitude},{longitude});
 );
 out center tags;
 """
 
-    last_error = None
 
-    for api_url in OVERPASS_APIS:
+        for api_url in OVERPASS_APIS:
 
-        try:
+            try:
 
-            print(
-                "Trying Overpass:",
-                api_url
-            )
-
-            response = requests.post(
-
-                api_url,
-
-                data={
-                    "data":
-                        query
-                },
-
-                headers={
-                    "User-Agent":
-                        (
-                            "FoodAI/1.0 "
-                            "(Food Recognition "
-                            "Student Project)"
-                        ),
-
-                    "Accept":
-                        "application/json"
-                },
-
-                timeout=18
-            )
-
-            response.raise_for_status()
-
-            data = response.json()
-
-            restaurants = []
-
-            seen = set()
-
-            for element in (
-                data.get(
-                    "elements",
-                    []
+                print(
+                    "Trying Overpass:",
+                    api_url
                 )
-            ):
 
-                tags = (
-                    element.get(
-                        "tags"
+
+                response = requests.post(
+
+                    api_url,
+
+                    data={
+                        "data":
+                            query
+                    },
+
+                    headers={
+                        "User-Agent":
+                            (
+                                "FoodAI/1.0 "
+                                "(Food Recognition Student Project)"
+                            ),
+
+                        "Accept":
+                            "application/json"
+                    },
+
+                    timeout=20
+                )
+
+
+                response.raise_for_status()
+
+
+                data = response.json()
+
+
+                restaurants = []
+
+                seen = set()
+
+
+                for element in (
+                    data.get(
+                        "elements",
+                        []
                     )
-                    or
-                    {}
-                )
-
-                name = (
-                    tags.get(
-                        "name"
-                    )
-                    or
-                    tags.get(
-                        "brand"
-                    )
-                )
-
-                if not name:
-                    continue
-
-
-                lat = element.get(
-                    "lat"
-                )
-
-                lon = element.get(
-                    "lon"
-                )
-
-
-                if (
-                    lat is None
-                    or
-                    lon is None
                 ):
 
-                    center = (
+                    tags = (
                         element.get(
-                            "center"
+                            "tags"
                         )
                         or
                         {}
                     )
 
-                    lat = center.get(
+
+                    name = (
+                        tags.get(
+                            "name"
+                        )
+                        or
+                        tags.get(
+                            "brand"
+                        )
+                    )
+
+
+                    if not name:
+                        continue
+
+
+                    lat = element.get(
                         "lat"
                     )
 
-                    lon = center.get(
+                    lon = element.get(
                         "lon"
                     )
 
 
-                if (
-                    lat is None
-                    or
-                    lon is None
-                ):
-                    continue
+                    if (
+                        lat is None
+                        or
+                        lon is None
+                    ):
+
+                        center = (
+                            element.get(
+                                "center"
+                            )
+                            or
+                            {}
+                        )
+
+                        lat = center.get(
+                            "lat"
+                        )
+
+                        lon = center.get(
+                            "lon"
+                        )
 
 
-                try:
-
-                    lat = float(
-                        lat
-                    )
-
-                    lon = float(
-                        lon
-                    )
-
-                except (
-                    TypeError,
-                    ValueError
-                ):
-                    continue
+                    if (
+                        lat is None
+                        or
+                        lon is None
+                    ):
+                        continue
 
 
-                unique_key = (
-                    name.lower(),
-                    round(
-                        lat,
-                        5
-                    ),
-                    round(
-                        lon,
-                        5
-                    )
-                )
+                    try:
+
+                        lat = float(
+                            lat
+                        )
+
+                        lon = float(
+                            lon
+                        )
+
+                    except (
+                        TypeError,
+                        ValueError
+                    ):
+                        continue
 
 
-                if unique_key in seen:
-                    continue
-
-
-                seen.add(
-                    unique_key
-                )
-
-
-                distance = (
-                    haversine_km(
-                        latitude,
-                        longitude,
-                        lat,
-                        lon
-                    )
-                )
-
-
-                restaurants.append({
-
-                    "name":
-                        name,
-
-                    "lat":
-                        lat,
-
-                    "lon":
-                        lon,
-
-                    "distance_km":
+                    unique_key = (
+                        name.lower(),
                         round(
-                            distance,
-                            2
+                            lat,
+                            5
                         ),
+                        round(
+                            lon,
+                            5
+                        )
+                    )
 
-                    "address":
-                        build_restaurant_address(
-                            tags
-                        ),
 
-                    "cuisine":
+                    if unique_key in seen:
+                        continue
+
+
+                    seen.add(
+                        unique_key
+                    )
+
+
+                    distance = (
+                        haversine_km(
+                            latitude,
+                            longitude,
+                            lat,
+                            lon
+                        )
+                    )
+
+
+                    category = (
                         tags.get(
-                            "cuisine"
+                            "amenity"
                         )
                         or
-                        "",
-
-                    "source":
-                        "OpenStreetMap"
-
-                })
-
-
-            restaurants.sort(
-                key=lambda item:
-                    item[
-                        "distance_km"
-                    ]
-            )
+                        tags.get(
+                            "shop"
+                        )
+                        or
+                        ""
+                    )
 
 
-            print(
-                "Overpass success:",
-                api_url,
-                "restaurants:",
-                len(
-                    restaurants
+                    restaurants.append({
+
+                        "name":
+                            name,
+
+                        "lat":
+                            lat,
+
+                        "lon":
+                            lon,
+
+                        "distance_km":
+                            round(
+                                distance,
+                                2
+                            ),
+
+                        "address":
+                            build_restaurant_address(
+                                tags
+                            ),
+
+                        "cuisine":
+                            tags.get(
+                                "cuisine"
+                            )
+                            or
+                            "",
+
+                        "category":
+                            category,
+
+                        "source":
+                            "OpenStreetMap"
+
+                    })
+
+
+                restaurants.sort(
+                    key=lambda item:
+                        item[
+                            "distance_km"
+                        ]
                 )
-            )
 
 
-            return restaurants[:20]
+                if restaurants:
+
+                    print(
+                        "Nearby places found:",
+                        len(
+                            restaurants
+                        ),
+                        "within",
+                        radius,
+                        "meters"
+                    )
+
+                    return restaurants[:30]
 
 
-        except Exception as error:
-
-            last_error = error
-
-            print(
-                "Overpass failed:",
-                api_url,
-                repr(
-                    error
+                print(
+                    "No places found within",
+                    radius,
+                    "meters"
                 )
+
+
+            except Exception as error:
+
+                last_error = error
+
+                print(
+                    "Overpass failed:",
+                    api_url,
+                    repr(
+                        error
+                    )
+                )
+
+                continue
+
+
+    if last_error:
+
+        print(
+            "Final Overpass error:",
+            repr(
+                last_error
             )
-
-            continue
-
-
-    raise RuntimeError(
-        "All Overpass servers failed: "
-        + str(
-            last_error
         )
-    )
+
+
+    return []
 
 
 @app.route(
