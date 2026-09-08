@@ -3,31 +3,59 @@ import io
 import json
 import re
 import base64
+import html
 import threading
 import urllib.parse
 import urllib.request
+
 from datetime import datetime, timezone
 
 from PIL import Image
 
-from flask import Flask, request, jsonify, make_response
+from flask import (
+    Flask,
+    request,
+    jsonify,
+    make_response
+)
+
 from flask_cors import CORS
 from groq import Groq
 
 
 # ============================================================
-# FOODAI CONFIGURATION
+# FOODAI CONFIG
 # ============================================================
 
-PROJECT_NAME = "AI Food Recognition & Recommendation Agent"
+PROJECT_NAME = (
+    "AI Food Recognition & Recommendation Agent"
+)
 
-# Qwen Vision hosted by Groq.
-# No Gemini. No OpenAI.
 PRIMARY_MODEL = "qwen/qwen3.6-27b"
 
-GITHUB_ORIGIN = "https://vickygowda1745.github.io"
+GITHUB_ORIGIN = (
+    "https://vickygowda1745.github.io"
+)
 
-MAX_IMAGE_SIZE = 6 * 1024 * 1024
+MAX_IMAGE_SIZE = (
+    6 * 1024 * 1024
+)
+
+WIKIMEDIA_API = (
+    "https://commons.wikimedia.org/w/api.php"
+)
+
+WIKIMEDIA_USER_AGENT = (
+    "FoodAI-College-Project/1.0 "
+    "(food recognition and recommendation app)"
+)
+
+
+# Small in-memory image cache.
+# Avoids asking Wikimedia repeatedly
+# for the same food during one server session.
+
+IMAGE_CACHE = {}
 
 
 # ============================================================
@@ -36,7 +64,9 @@ MAX_IMAGE_SIZE = 6 * 1024 * 1024
 
 app = Flask(__name__)
 
-app.config["MAX_CONTENT_LENGTH"] = MAX_IMAGE_SIZE
+app.config[
+    "MAX_CONTENT_LENGTH"
+] = MAX_IMAGE_SIZE
 
 
 CORS(
@@ -63,7 +93,9 @@ CORS(
 @app.after_request
 def add_cors_headers(response):
 
-    origin = request.headers.get("Origin")
+    origin = request.headers.get(
+        "Origin"
+    )
 
     if origin == GITHUB_ORIGIN:
 
@@ -78,7 +110,8 @@ def add_cors_headers(response):
         response.headers[
             "Access-Control-Allow-Headers"
         ] = (
-            "Content-Type, X-FoodAI-Session"
+            "Content-Type, "
+            "X-FoodAI-Session"
         )
 
     return response
@@ -88,7 +121,9 @@ def add_cors_headers(response):
 # GROQ
 # ============================================================
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = os.getenv(
+    "GROQ_API_KEY"
+)
 
 groq_client = None
 
@@ -102,7 +137,9 @@ if GROQ_API_KEY:
             timeout=15.0
         )
 
-        print("Groq connected")
+        print(
+            "Groq connected"
+        )
 
     except Exception as error:
 
@@ -152,9 +189,7 @@ def telegram_configured():
 def send_telegram_message(text):
 
     if not telegram_configured():
-
         return
-
 
     try:
 
@@ -164,17 +199,20 @@ def send_telegram_message(text):
             + "/sendMessage"
         )
 
+        payload = (
+            urllib.parse.urlencode(
+                {
+                    "chat_id":
+                        TELEGRAM_CHAT_ID,
 
-        payload = urllib.parse.urlencode(
-            {
-                "chat_id":
-                    TELEGRAM_CHAT_ID,
-
-                "text":
-                    text
-            }
-        ).encode("utf-8")
-
+                    "text":
+                        text
+                }
+            )
+            .encode(
+                "utf-8"
+            )
+        )
 
         req = urllib.request.Request(
             url,
@@ -182,21 +220,16 @@ def send_telegram_message(text):
             method="POST"
         )
 
-
         urllib.request.urlopen(
             req,
             timeout=5
         ).read()
 
-
         print(
             "Telegram notification sent"
         )
 
-
     except Exception as error:
-
-        # Telegram must never break scanning.
 
         print(
             "Telegram error:",
@@ -205,7 +238,7 @@ def send_telegram_message(text):
 
 
 # ============================================================
-# SCAN CONTEXT
+# DEVICE / SESSION
 # ============================================================
 
 def get_scan_context():
@@ -215,7 +248,6 @@ def get_scan_context():
         "Unknown device"
     )
 
-
     if len(user_agent) > 160:
 
         user_agent = (
@@ -223,12 +255,10 @@ def get_scan_context():
             + "..."
         )
 
-
     session_id = request.headers.get(
         "X-FoodAI-Session",
         "Not supplied"
     )
-
 
     timestamp = datetime.now(
         timezone.utc
@@ -236,9 +266,7 @@ def get_scan_context():
         "%Y-%m-%d %H:%M:%S UTC"
     )
 
-
     return {
-
         "user_agent":
             user_agent,
 
@@ -264,13 +292,18 @@ def notify_scan(
         f"Recognition: {engine}\n"
         f"Time: {context['time']}\n"
         f"Session: {context['session_id']}\n"
-        f"Device/Browser: {context['user_agent']}"
+        f"Device/Browser: "
+        f"{context['user_agent']}"
     )
 
-
     threading.Thread(
-        target=send_telegram_message,
-        args=(message,),
+        target=
+            send_telegram_message,
+
+        args=(
+            message,
+        ),
+
         daemon=True
     ).start()
 
@@ -287,23 +320,21 @@ def get_image_bytes():
             "image"
         ].read()
 
-
     if "file" in request.files:
 
         return request.files[
             "file"
         ].read()
 
-
     return request.get_data()
 
 
-def validate_image(image_bytes):
+def validate_image(
+    image_bytes
+):
 
     if not image_bytes:
-
         return False
-
 
     try:
 
@@ -316,7 +347,6 @@ def validate_image(image_bytes):
         image.verify()
 
         return True
-
 
     except Exception:
 
@@ -335,16 +365,13 @@ def get_image_mime_type(
             )
         )
 
-
         image_format = (
             image.format
             or
             "JPEG"
         ).upper()
 
-
         mime_map = {
-
             "JPEG":
                 "image/jpeg",
 
@@ -359,15 +386,12 @@ def get_image_mime_type(
 
             "GIF":
                 "image/gif"
-
         }
-
 
         return mime_map.get(
             image_format,
             "image/jpeg"
         )
-
 
     except Exception:
 
@@ -378,20 +402,24 @@ def image_to_data_url(
     image_bytes
 ):
 
-    mime_type = get_image_mime_type(
-        image_bytes
+    mime_type = (
+        get_image_mime_type(
+            image_bytes
+        )
     )
 
-
-    encoded = base64.b64encode(
-        image_bytes
-    ).decode(
-        "utf-8"
+    encoded = (
+        base64.b64encode(
+            image_bytes
+        )
+        .decode(
+            "utf-8"
+        )
     )
-
 
     return (
-        f"data:{mime_type};base64,{encoded}"
+        f"data:{mime_type};"
+        f"base64,{encoded}"
     )
 
 
@@ -407,9 +435,7 @@ def parse_json(text):
             "Empty AI response"
         )
 
-
     text = text.strip()
-
 
     text = re.sub(
         r"^```json\s*",
@@ -418,13 +444,11 @@ def parse_json(text):
         flags=re.IGNORECASE
     )
 
-
     text = re.sub(
         r"^```\s*",
         "",
         text
     )
-
 
     text = re.sub(
         r"\s*```$",
@@ -432,13 +456,11 @@ def parse_json(text):
         text
     )
 
-
     try:
 
         return json.loads(
             text
         )
-
 
     except Exception:
 
@@ -448,17 +470,43 @@ def parse_json(text):
             flags=re.DOTALL
         )
 
-
         if match:
 
             return json.loads(
                 match.group(0)
             )
 
-
         raise ValueError(
             "AI did not return valid JSON"
         )
+
+
+# ============================================================
+# TEXT CLEANER
+# ============================================================
+
+def clean_html_text(value):
+
+    if not value:
+        return ""
+
+    value = html.unescape(
+        str(value)
+    )
+
+    value = re.sub(
+        r"<[^>]+>",
+        "",
+        value
+    )
+
+    value = re.sub(
+        r"\s+",
+        " ",
+        value
+    )
+
+    return value.strip()
 
 
 # ============================================================
@@ -471,11 +519,9 @@ def normalize_food_name(name):
 
         return "Unknown Food"
 
-
     clean = str(
         name
     ).strip()
-
 
     replacements = {
 
@@ -523,14 +569,380 @@ def normalize_food_name(name):
 
         "paneer butter masala curry":
             "Paneer Butter Masala"
-
     }
-
 
     return replacements.get(
         clean.lower(),
         clean
     )
+
+
+# ============================================================
+# WIKIMEDIA FOOD IMAGE
+# ============================================================
+
+def get_wikimedia_food_image(
+    food_name
+):
+
+    cache_key = (
+        food_name
+        .strip()
+        .lower()
+    )
+
+    if cache_key in IMAGE_CACHE:
+
+        return IMAGE_CACHE[
+            cache_key
+        ]
+
+    result = {
+        "image_url":
+            "",
+
+        "image_page_url":
+            "",
+
+        "image_source":
+            "Wikimedia Commons",
+
+        "image_author":
+            "",
+
+        "image_license":
+            "",
+
+        "image_license_url":
+            ""
+    }
+
+    try:
+
+        params = {
+            "action":
+                "query",
+
+            "format":
+                "json",
+
+            "generator":
+                "search",
+
+            "gsrsearch":
+                f"{food_name} food",
+
+            "gsrnamespace":
+                "6",
+
+            "gsrlimit":
+                "8",
+
+            "prop":
+                "imageinfo",
+
+            "iiprop":
+                (
+                    "url|"
+                    "extmetadata"
+                ),
+
+            "iiurlwidth":
+                "900"
+        }
+
+        url = (
+            WIKIMEDIA_API
+            + "?"
+            + urllib.parse.urlencode(
+                params
+            )
+        )
+
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent":
+                    WIKIMEDIA_USER_AGENT,
+
+                "Accept":
+                    "application/json"
+            }
+        )
+
+        response = (
+            urllib.request.urlopen(
+                req,
+                timeout=7
+            )
+            .read()
+        )
+
+        data = json.loads(
+            response.decode(
+                "utf-8"
+            )
+        )
+
+        pages = (
+            data
+            .get(
+                "query",
+                {}
+            )
+            .get(
+                "pages",
+                {}
+            )
+        )
+
+        candidates = []
+
+        for page in pages.values():
+
+            title = str(
+                page.get(
+                    "title",
+                    ""
+                )
+            )
+
+            imageinfo = (
+                page.get(
+                    "imageinfo",
+                    []
+                )
+            )
+
+            if not imageinfo:
+                continue
+
+            info = imageinfo[0]
+
+            image_url = (
+                info.get(
+                    "thumburl"
+                )
+                or
+                info.get(
+                    "url"
+                )
+                or
+                ""
+            )
+
+            if not image_url:
+                continue
+
+            lower_url = (
+                image_url.lower()
+            )
+
+            # Avoid SVG/PDF/etc.
+            # We want normal photos.
+
+            if not any(
+                extension
+                in lower_url
+
+                for extension in [
+                    ".jpg",
+                    ".jpeg",
+                    ".png",
+                    ".webp"
+                ]
+            ):
+
+                continue
+
+            metadata = (
+                info.get(
+                    "extmetadata",
+                    {}
+                )
+            )
+
+            description = (
+                metadata
+                .get(
+                    "ImageDescription",
+                    {}
+                )
+                .get(
+                    "value",
+                    ""
+                )
+            )
+
+            description = (
+                clean_html_text(
+                    description
+                )
+            )
+
+            score_text = (
+                title
+                + " "
+                + description
+            ).lower()
+
+            food_words = [
+                word
+                for word
+                in food_name
+                .lower()
+                .split()
+                if len(word) >= 3
+            ]
+
+            score = sum(
+                1
+                for word
+                in food_words
+                if word in score_text
+            )
+
+            candidates.append(
+                (
+                    score,
+                    page,
+                    info,
+                    metadata
+                )
+            )
+
+        if not candidates:
+
+            IMAGE_CACHE[
+                cache_key
+            ] = result
+
+            return result
+
+        candidates.sort(
+            key=lambda item:
+                item[0],
+            reverse=True
+        )
+
+        (
+            _,
+            selected_page,
+            selected_info,
+            metadata
+        ) = candidates[0]
+
+        author = (
+            metadata
+            .get(
+                "Artist",
+                {}
+            )
+            .get(
+                "value",
+                ""
+            )
+        )
+
+        author = clean_html_text(
+            author
+        )
+
+        license_name = (
+            metadata
+            .get(
+                "LicenseShortName",
+                {}
+            )
+            .get(
+                "value",
+                ""
+            )
+        )
+
+        license_name = (
+            clean_html_text(
+                license_name
+            )
+        )
+
+        license_url = (
+            metadata
+            .get(
+                "LicenseUrl",
+                {}
+            )
+            .get(
+                "value",
+                ""
+            )
+        )
+
+        page_title = (
+            selected_page.get(
+                "title",
+                ""
+            )
+        )
+
+        page_url = (
+            "https://commons.wikimedia.org/wiki/"
+            + urllib.parse.quote(
+                page_title.replace(
+                    " ",
+                    "_"
+                )
+            )
+        )
+
+        result = {
+
+            "image_url":
+                (
+                    selected_info.get(
+                        "thumburl"
+                    )
+                    or
+                    selected_info.get(
+                        "url",
+                        ""
+                    )
+                ),
+
+            "image_page_url":
+                page_url,
+
+            "image_source":
+                "Wikimedia Commons",
+
+            "image_author":
+                author,
+
+            "image_license":
+                license_name,
+
+            "image_license_url":
+                license_url
+        }
+
+        IMAGE_CACHE[
+            cache_key
+        ] = result
+
+        return result
+
+    except Exception as error:
+
+        print(
+            "Wikimedia image error:",
+            error
+        )
+
+        IMAGE_CACHE[
+            cache_key
+        ] = result
+
+        return result
 
 
 # ============================================================
@@ -545,7 +957,7 @@ Analyze the image carefully.
 Identify the MAIN food or dish shown.
 
 The image can contain ANY food from ANY cuisine in the world.
-Do not use a fixed list.
+Do not use a fixed food list.
 
 Identify the MOST SPECIFIC dish supported by visible evidence.
 
@@ -571,16 +983,14 @@ Prawn Biryani
 Egg Biryani
 Vegetable Biryani
 
-For Indian food, use common Indian terminology.
+For Indian foods, use common Indian terminology.
 
 Use Prawn instead of Shrimp for Indian dishes.
 
 Do NOT answer only "Biryani" if the visible protein
 or variety can reasonably be identified.
 
-Do not invent ingredients that are not visible.
-
-Return ONLY this JSON object:
+Return ONLY JSON:
 
 {
   "is_food": true,
@@ -610,13 +1020,13 @@ You are FoodAI's food recommendation engine.
 Food:
 {food_name}
 
-Provide useful, concise information.
+Provide useful and concise information.
 
 Return ONLY JSON:
 
 {{
   "cuisine": "Cuisine or region",
-  "description": "Short description of the food",
+  "description": "Short description",
   "visible_items": [
     "item 1",
     "item 2"
@@ -629,9 +1039,6 @@ Return ONLY JSON:
 Do not provide medical advice.
 
 Use Indian terminology for Indian foods.
-
-Do not claim an ingredient is visible unless it is actually
-known from the supplied dish/image context.
 
 Return JSON only.
 """
@@ -648,8 +1055,7 @@ The user searched for:
 
 {query}
 
-Interpret the intended dish even if there are minor
-spelling mistakes.
+Interpret the intended dish even if the spelling is imperfect.
 
 Return ONLY JSON:
 
@@ -684,14 +1090,15 @@ def call_groq_image(
             "Groq is not configured"
         )
 
-
     data_url = image_to_data_url(
         image_bytes
     )
 
-
     completion = (
-        groq_client.chat.completions.create(
+        groq_client
+        .chat
+        .completions
+        .create(
 
             model=
                 PRIMARY_MODEL,
@@ -740,7 +1147,6 @@ def call_groq_image(
         )
     )
 
-
     content = (
         completion
         .choices[0]
@@ -748,13 +1154,11 @@ def call_groq_image(
         .content
     )
 
-
     if not content:
 
         raise RuntimeError(
             "Groq returned an empty response"
         )
-
 
     return content
 
@@ -774,9 +1178,11 @@ def call_groq_text(
             "Groq is not configured"
         )
 
-
     completion = (
-        groq_client.chat.completions.create(
+        groq_client
+        .chat
+        .completions
+        .create(
 
             model=
                 PRIMARY_MODEL,
@@ -808,7 +1214,6 @@ def call_groq_text(
         )
     )
 
-
     content = (
         completion
         .choices[0]
@@ -816,13 +1221,11 @@ def call_groq_text(
         .content
     )
 
-
     if not content:
 
         raise RuntimeError(
             "Groq returned an empty response"
         )
-
 
     return content
 
@@ -837,29 +1240,24 @@ def identify_food(
 
     response_text = (
         call_groq_image(
-
             RECOGNITION_PROMPT,
-
             image_bytes,
-
             max_tokens=120
-
         )
     )
-
 
     data = parse_json(
         response_text
     )
 
-
-    food = normalize_food_name(
-        data.get(
-            "food",
-            "Unknown Food"
+    food = (
+        normalize_food_name(
+            data.get(
+                "food",
+                "Unknown Food"
+            )
         )
     )
-
 
     try:
 
@@ -874,7 +1272,6 @@ def identify_food(
 
         confidence = 0
 
-
     confidence = max(
         0,
         min(
@@ -882,7 +1279,6 @@ def identify_food(
             100
         )
     )
-
 
     return {
 
@@ -914,33 +1310,27 @@ def generate_details(
     food_name
 ):
 
-    prompt = create_details_prompt(
-        food_name
-    )
-
-
-    response_text = (
-        call_groq_image(
-
-            prompt,
-
-            image_bytes,
-
-            max_tokens=350
-
+    prompt = (
+        create_details_prompt(
+            food_name
         )
     )
 
+    response_text = (
+        call_groq_image(
+            prompt,
+            image_bytes,
+            max_tokens=350
+        )
+    )
 
     result = parse_json(
         response_text
     )
 
-
     result[
         "engine"
     ] = PRIMARY_MODEL
-
 
     return result
 
@@ -953,49 +1343,41 @@ def search_food_information(
     query
 ):
 
-    prompt = create_search_prompt(
-        query
-    )
-
-
-    response_text = (
-        call_groq_text(
-
-            prompt,
-
-            max_tokens=350
-
+    prompt = (
+        create_search_prompt(
+            query
         )
     )
 
+    response_text = (
+        call_groq_text(
+            prompt,
+            max_tokens=350
+        )
+    )
 
     result = parse_json(
         response_text
     )
 
-
-    result[
-        "food"
-    ] = normalize_food_name(
-
-        result.get(
-            "food",
-            query
+    result["food"] = (
+        normalize_food_name(
+            result.get(
+                "food",
+                query
+            )
         )
-
     )
-
 
     result[
         "engine"
     ] = PRIMARY_MODEL
 
-
     return result
 
 
 # ============================================================
-# IDENTIFY
+# IDENTIFY ROUTE
 # ============================================================
 
 @app.route(
@@ -1014,58 +1396,47 @@ def identify():
             204
         )
 
-
     try:
 
         scan_context = (
             get_scan_context()
         )
 
-
         image_bytes = (
             get_image_bytes()
         )
 
-
         if not image_bytes:
 
             return jsonify({
-
                 "success":
                     False,
 
                 "error":
                     "No image received"
-
             }), 400
-
 
         if not validate_image(
             image_bytes
         ):
 
             return jsonify({
-
                 "success":
                     False,
 
                 "error":
                     "Invalid image"
-
             }), 400
-
 
         result = identify_food(
             image_bytes
         )
-
 
         if not result[
             "is_food"
         ]:
 
             return jsonify({
-
                 "success":
                     False,
 
@@ -1077,12 +1448,9 @@ def identify():
 
                 "message":
                     "No food detected."
-
             }), 200
 
-
         notify_scan(
-
             result[
                 "food"
             ],
@@ -1096,9 +1464,7 @@ def identify():
             ],
 
             scan_context
-
         )
-
 
         return jsonify({
 
@@ -1122,14 +1488,12 @@ def identify():
 
         }), 200
 
-
     except Exception as error:
 
         print(
             "IDENTIFY ERROR:",
             repr(error)
         )
-
 
         return jsonify({
 
@@ -1146,7 +1510,7 @@ def identify():
 
 
 # ============================================================
-# PREDICT
+# PREDICT ROUTE
 # ============================================================
 
 @app.route(
@@ -1165,51 +1529,41 @@ def predict():
             204
         )
 
-
     try:
 
         scan_context = (
             get_scan_context()
         )
 
-
         image_bytes = (
             get_image_bytes()
         )
 
-
         if not image_bytes:
 
             return jsonify({
-
                 "success":
                     False,
 
                 "error":
                     "No image received"
-
             }), 400
-
 
         if not validate_image(
             image_bytes
         ):
 
             return jsonify({
-
                 "success":
                     False,
 
                 "error":
                     "Invalid image"
-
             }), 400
-
 
         result = identify_food(
             image_bytes
         )
-
 
         if not result[
             "is_food"
@@ -1228,9 +1582,7 @@ def predict():
 
             }), 200
 
-
         notify_scan(
-
             result[
                 "food"
             ],
@@ -1244,32 +1596,27 @@ def predict():
             ],
 
             scan_context
-
         )
-
 
         details = {}
 
-
         try:
 
-            details = generate_details(
-
-                image_bytes,
-
-                result[
-                    "food"
-                ]
-
+            details = (
+                generate_details(
+                    image_bytes,
+                    result[
+                        "food"
+                    ]
+                )
             )
 
-        except Exception as detail_error:
+        except Exception as error:
 
             print(
                 "DETAIL GENERATION ERROR:",
-                repr(detail_error)
+                repr(error)
             )
-
 
         return jsonify({
 
@@ -1329,14 +1676,12 @@ def predict():
 
         }), 200
 
-
     except Exception as error:
 
         print(
             "PREDICT ERROR:",
             repr(error)
         )
-
 
         return jsonify({
 
@@ -1353,7 +1698,7 @@ def predict():
 
 
 # ============================================================
-# DETAILS
+# DETAILS ROUTE
 # ============================================================
 
 @app.route(
@@ -1372,76 +1717,64 @@ def details():
             204
         )
 
-
     try:
 
         image_bytes = (
             get_image_bytes()
         )
 
-
         food_name = (
             request.form.get(
                 "food",
                 ""
-            ).strip()
+            )
+            .strip()
         )
-
 
         if not image_bytes:
 
             return jsonify({
-
                 "success":
                     False,
 
                 "error":
                     "No image received"
-
             }), 400
-
 
         if not food_name:
 
             return jsonify({
-
                 "success":
                     False,
 
                 "error":
                     "Food name missing"
-
             }), 400
-
 
         if not validate_image(
             image_bytes
         ):
 
             return jsonify({
-
                 "success":
                     False,
 
                 "error":
                     "Invalid image"
-
             }), 400
 
-
-        food_name = normalize_food_name(
-            food_name
+        food_name = (
+            normalize_food_name(
+                food_name
+            )
         )
 
-
-        result = generate_details(
-
-            image_bytes,
-
-            food_name
-
+        result = (
+            generate_details(
+                image_bytes,
+                food_name
+            )
         )
-
 
         return jsonify({
 
@@ -1495,14 +1828,12 @@ def details():
 
         }), 200
 
-
     except Exception as error:
 
         print(
             "DETAIL ERROR:",
             repr(error)
         )
-
 
         return jsonify({
 
@@ -1519,7 +1850,7 @@ def details():
 
 
 # ============================================================
-# SEARCH
+# SEARCH ROUTE
 # ============================================================
 
 @app.route(
@@ -1538,13 +1869,15 @@ def search():
             204
         )
 
-
     try:
 
-        data = request.get_json(
-            silent=True
-        ) or {}
-
+        data = (
+            request.get_json(
+                silent=True
+            )
+            or
+            {}
+        )
 
         query = str(
             data.get(
@@ -1552,7 +1885,6 @@ def search():
                 ""
             )
         ).strip()
-
 
         if not query:
 
@@ -1566,7 +1898,6 @@ def search():
 
             }), 400
 
-
         if len(query) > 100:
 
             return jsonify({
@@ -1579,11 +1910,27 @@ def search():
 
             }), 400
 
-
-        result = search_food_information(
-            query
+        result = (
+            search_food_information(
+                query
+            )
         )
 
+        food_name = (
+            result.get(
+                "food",
+                query
+            )
+        )
+
+        # Find a matching Commons image.
+        # Failure here does NOT break food search.
+
+        image_data = (
+            get_wikimedia_food_image(
+                food_name
+            )
+        )
 
         return jsonify({
 
@@ -1594,10 +1941,7 @@ def search():
                 query,
 
             "food":
-                result.get(
-                    "food",
-                    query
-                ),
+                food_name,
 
             "cuisine":
                 result.get(
@@ -1633,10 +1977,45 @@ def search():
                 result.get(
                     "engine",
                     PRIMARY_MODEL
+                ),
+
+            "image_url":
+                image_data.get(
+                    "image_url",
+                    ""
+                ),
+
+            "image_page_url":
+                image_data.get(
+                    "image_page_url",
+                    ""
+                ),
+
+            "image_source":
+                image_data.get(
+                    "image_source",
+                    ""
+                ),
+
+            "image_author":
+                image_data.get(
+                    "image_author",
+                    ""
+                ),
+
+            "image_license":
+                image_data.get(
+                    "image_license",
+                    ""
+                ),
+
+            "image_license_url":
+                image_data.get(
+                    "image_license_url",
+                    ""
                 )
 
         }), 200
-
 
     except Exception as error:
 
@@ -1644,7 +2023,6 @@ def search():
             "SEARCH ERROR:",
             repr(error)
         )
-
 
         return jsonify({
 
@@ -1666,7 +2044,9 @@ def search():
 
 @app.route(
     "/health",
-    methods=["GET"]
+    methods=[
+        "GET"
+    ]
 )
 def health():
 
@@ -1678,14 +2058,14 @@ def health():
         "project":
             PROJECT_NAME,
 
-        "recognition_mode":
-            "open-ended",
-
         "provider":
             "Groq",
 
         "primary_model":
             PRIMARY_MODEL,
+
+        "recognition_mode":
+            "open-ended",
 
         "groq_configured":
             groq_configured(),
@@ -1694,6 +2074,9 @@ def health():
             telegram_configured(),
 
         "search_enabled":
+            True,
+
+        "wikimedia_images":
             True,
 
         "gemini_used":
@@ -1711,7 +2094,9 @@ def health():
 
 @app.route(
     "/",
-    methods=["GET"]
+    methods=[
+        "GET"
+    ]
 )
 def home():
 
@@ -1735,6 +2120,8 @@ def home():
 
             "Food search",
 
+            "Wikimedia food images",
+
             "Food recommendations",
 
             "Telegram scan notifications",
@@ -1747,12 +2134,13 @@ def home():
 
 
 # ============================================================
-# START
+# START SERVER
 # ============================================================
 
 if __name__ == "__main__":
 
     print()
+
     print(
         "======================================"
     )
@@ -1785,13 +2173,11 @@ if __name__ == "__main__":
     )
 
     print(
-        "Groq:",
-        (
-            "CONFIGURED"
-            if groq_configured()
-            else
-            "NOT CONFIGURED"
-        )
+        "Wikimedia Images: ENABLED"
+    )
+
+    print(
+        "Search: ENABLED"
     )
 
     print(
@@ -1814,10 +2200,10 @@ if __name__ == "__main__":
 
     print()
 
-
     app.run(
 
-        host="0.0.0.0",
+        host=
+            "0.0.0.0",
 
         port=int(
             os.getenv(
@@ -1827,4 +2213,5 @@ if __name__ == "__main__":
         ),
 
         debug=False
+
     )
